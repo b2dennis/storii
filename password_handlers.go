@@ -31,9 +31,13 @@ func getPasswords(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "User did not pass a valid UInt")
 		return
 	}
-	fmt.Fprintf(w, "Passwords for user %d", UserID)
 	var storedPasswords []StoredPassword
 	db.Where("user_id = ?", uint(UserID)).Find(&storedPasswords)
+
+	if len(storedPasswords) == 0 {
+		http.Error(w, "User has no passwords saved", http.StatusBadRequest)
+		return
+	}
 
 	for _, password := range storedPasswords {
 		fmt.Fprintf(w, "%s\n", password.Value)

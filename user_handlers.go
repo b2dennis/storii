@@ -14,7 +14,7 @@ var userHandlers []RequestHandlerStruct = []RequestHandlerStruct{
 	{
 		Handler: createUser,
 		Method:  "POST",
-		Route:   "/",
+		Route:   "",
 	},
 }
 
@@ -23,6 +23,7 @@ func registerUserHandlers(r *mux.Router) {
 	for _, handler := range userHandlers {
 		fmt.Printf("Added handler for route /user%s with method %s\n", handler.Route, handler.Method)
 		subRouter.HandleFunc(handler.Route, handler.Handler).Methods(handler.Method)
+		subRouter.HandleFunc(handler.Route+"/", handler.Handler).Methods(handler.Method)
 	}
 }
 
