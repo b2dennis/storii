@@ -1,3 +1,5 @@
+// Handlers for the Password subroute
+
 package main
 
 import (
@@ -28,14 +30,15 @@ func getPasswords(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	UserID, err := strconv.ParseUint(vars["user_id"], 10, 64)
 	if err != nil {
-		fmt.Fprint(w, "User did not pass a valid UInt")
+		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidInput, "user_id needs to be a UInt")
 		return
 	}
+
 	var storedPasswords []StoredPassword
 	db.Where("user_id = ?", uint(UserID)).Find(&storedPasswords)
 
 	if len(storedPasswords) == 0 {
-		http.Error(w, "User has no passwords saved", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusInternalServerError, ErrorNotFound, "no passwords found")
 		return
 	}
 

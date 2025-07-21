@@ -1,3 +1,5 @@
+// Struct definitions
+
 package main
 
 import (
@@ -35,8 +37,18 @@ type User struct {
 	StoredPasswords []StoredPassword `gorm:"foreignKey:UserID"`
 }
 
-// API Requests JSON
+// API JSON Structs
+type ErrorResponse struct {
+	Error   string `json:"error"`
+	Message string `json:"message,omitempty"`
+}
+
 type CreateUserRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+}
+
+type CreateUserResponse struct {
+	ID       uint   `json:"id"`
+	Username string `json:"username"`
 }
