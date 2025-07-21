@@ -3,7 +3,9 @@ module b2dennis/pwman-api
 go 1.24.5
 
 require (
+	github.com/golang-jwt/jwt/v5 v5.2.3
 	github.com/gorilla/mux v1.8.1
+	golang.org/x/crypto v0.40.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.30.0
 )

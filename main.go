@@ -16,6 +16,9 @@ var config Config = Config{
 }
 
 func main() {
+	fmt.Println("Initializing JWT secret")
+	initJWTSecret()
+
 	fmt.Println("Initializing DB connection")
 	var err error
 	db, err = gorm.Open(sqlite.Open("data.db"), &gorm.Config{})

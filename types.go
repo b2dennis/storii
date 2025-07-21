@@ -52,3 +52,14 @@ type CreateUserResponse struct {
 	ID       uint   `json:"id"`
 	Username string `json:"username"`
 }
+
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type LoginResponse struct {
+	Token    string `json:"token"`
+	UserID   uint   `json:"user_id"`
+	Username string `json:"username"`
+}

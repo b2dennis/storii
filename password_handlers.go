@@ -12,25 +12,25 @@ import (
 
 var passwordHandlers []RequestHandlerStruct = []RequestHandlerStruct{
 	{
-		Handler: getPasswords,
+		Handler: jwtMiddleware(getPasswords),
 		Method:  "GET",
-		Route:   "/{user_id}",
+		Route:   "",
 	},
 }
 
 func registerPasswordHandlers(r *mux.Router) {
-	subRouter := r.PathPrefix("/password").Subrouter()
+	subRouter := r.PathPrefix(SubroutePassword).Subrouter()
 	for _, handler := range passwordHandlers {
-		fmt.Printf("Added handler for route /password%s with method %s\n", handler.Route, handler.Method)
+		fmt.Printf("Added handler for route %s%s with method %s\n", SubroutePassword, handler.Route, handler.Method)
 		subRouter.HandleFunc(handler.Route, handler.Handler).Methods(handler.Method)
 	}
 }
 
 func getPasswords(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	UserID, err := strconv.ParseUint(vars["user_id"], 10, 64)
+	userIDStr := r.Header.Get(AuthHeaderUserID)
+	UserID, err := strconv.ParseUint(userIDStr, 10, 64)
 	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidInput, "user_id needs to be a UInt")
+		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidID, "Invalid user ID in token")
 		return
 	}
 

@@ -1,0 +1,101 @@
+package main
+
+import (
+	"crypto/rand"
+	"errors"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
+)
+
+var jwtSecret []byte
+
+func initJWTSecret() {
+	jwtSecret = make([]byte, 32)
+	rand.Read(jwtSecret)
+}
+
+type Claims struct {
+	UserID   uint   `json:"user_id"`
+	Username string `json:"username"`
+	jwt.RegisteredClaims
+}
+
+func generateJWT(user User) (string, error) {
+	expirationTime := time.Now().Add(24 * time.Hour)
+	claims := &Claims{
+		UserID:   user.ID,
+		Username: user.Username,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(jwtSecret)
+}
+
+func validateJWT(tokenString string) (*Claims, error) {
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
+		return jwtSecret, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !token.Valid {
+		return nil, errors.New(AuthErrorInvalidToken)
+	}
+
+	return claims, nil
+}
+
+func extractJWTFromHeader(r *http.Request) (string, error) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return "", errors.New(AuthErrorHeaderMissing)
+	}
+
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		return "", errors.New(AuthErrorHeaderInvalid)
+	}
+
+	return parts[1], nil
+}
+
+func hashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	return string(bytes), err
+}
+
+func checkPasswordHash(password, hash string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	return err == nil
+}
+
+func jwtMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tokenString, err := extractJWTFromHeader(r)
+		if err != nil {
+			writeErrorResponse(w, http.StatusUnauthorized, "Unauthorized: "+err.Error(), "")
+			return
+		}
+
+		claims, err := validateJWT(tokenString)
+		if err != nil {
+			writeErrorResponse(w, http.StatusUnauthorized, "Unauthorized: "+err.Error(), "")
+		}
+
+		r.Header.Set(AuthHeaderUserID, string(rune(claims.UserID)))
+		r.Header.Set(AuthHeaderUsername, claims.Username)
+
+		next.ServeHTTP(w, r)
+	})
+}
