@@ -1,4 +1,4 @@
-module dennismtr/pwman-api
+module b2dennis/pwman-api
 
 go 1.24.5
 
