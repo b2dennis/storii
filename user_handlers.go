@@ -38,7 +38,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	var requestBody CreateUserRequest
 	err := json.NewDecoder(r.Body).Decode(&requestBody)
 	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidJson, "")
+		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidJson)
 		return
 	}
 
@@ -97,12 +97,12 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 	var user User
 	result := db.Where("username = ?", requestBody.Username).First(&user)
 	if result.RowsAffected == 0 {
-		writeErrorResponse(w, http.StatusUnauthorized, ErrorInvalidCredentials, "")
+		writeErrorResponse(w, http.StatusUnauthorized, ErrorInvalidCredentials)
 		return
 	}
 
 	if !checkPasswordHash(requestBody.Password, user.PasswordHash) {
-		writeErrorResponse(w, http.StatusUnauthorized, ErrorInvalidCredentials, "")
+		writeErrorResponse(w, http.StatusUnauthorized, ErrorInvalidCredentials)
 		return
 	}
 

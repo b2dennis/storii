@@ -8,6 +8,9 @@ const (
 	ContentTypeText = "text/plain"
 )
 
+// Success Response
+const ResponseSuccess = "ok"
+
 // Error Codes
 const (
 	ErrorInvalidID          = "invalid_id"
@@ -42,6 +45,13 @@ const (
 const (
 	UserRouteRegister = "/register"
 	UserRouteLogin    = "/login"
+)
+
+// Password Routes
+const (
+	PasswordRouteFetch  = ""
+	PasswordRouteAdd    = "/create"
+	PasswordRouteDelete = "/delete"
 )
 
 // Middleware Headers

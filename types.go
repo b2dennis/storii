@@ -4,13 +4,17 @@ package main
 
 import (
 	"net/http"
+	"time"
 
 	"gorm.io/gorm"
 )
 
 // General
 type Config struct {
-	Address string
+	Address   string
+	DBPath    string
+	JWTSecret string
+	JWTExpiry time.Duration
 }
 
 // Request Handlers
@@ -43,9 +47,15 @@ type ErrorResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
+type SuccessResponse struct {
+	Message string `json:"message"`
+	Data    any    `json:"data"`
+}
+
+// Password max len of 72 because of bcrypt limitations
 type CreateUserRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username string `json:"username" validate:"min=4,max=32"`
+	Password string `json:"password" validate:"min=12,max=72"`
 }
 
 type CreateUserSuccess struct {
@@ -54,8 +64,8 @@ type CreateUserSuccess struct {
 }
 
 type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username string `json:"username" validate:"min=4,max=32"`
+	Password string `json:"password" validate:"min=12,max=72"`
 }
 
 type LoginSuccess struct {
@@ -84,4 +94,8 @@ type AddPasswordRequest struct {
 
 type AddPasswordSuccess struct {
 	NewPassword ResponsePassword `json:"new_password"`
+}
+
+type DeletePasswordRequest struct {
+	Name string `json:"name" validate:"max=32,min=12"`
 }

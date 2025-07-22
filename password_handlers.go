@@ -15,12 +15,17 @@ var passwordHandlers []RequestHandlerStruct = []RequestHandlerStruct{
 	{
 		Handler: jwtMiddleware(getPasswords),
 		Method:  http.MethodGet,
-		Route:   "",
+		Route:   PasswordRouteFetch,
 	},
 	{
 		Handler: jwtMiddleware(addPassword),
 		Method:  http.MethodPost,
-		Route:   "/create",
+		Route:   PasswordRouteAdd,
+	},
+	{
+		Handler: jwtMiddleware(deletePassword),
+		Method:  http.MethodDelete,
+		Route:   PasswordRouteDelete,
 	},
 }
 
@@ -78,13 +83,14 @@ func addPassword(w http.ResponseWriter, r *http.Request) {
 	var addPasswordRequest AddPasswordRequest
 	err = json.NewDecoder(r.Body).Decode(&addPasswordRequest)
 	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidJson, "")
+		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidJson)
 		return
 	}
 
-	result := db.Where("user_id = ?", UserID).Where("name = ?", addPasswordRequest.Name)
+	var existing StoredPassword
+	result := db.Where("user_id = ? AND name = ?", UserID, addPasswordRequest.Name).First(&existing)
 	if result.RowsAffected > 0 {
-		writeErrorResponse(w, http.StatusBadRequest, ErrorDuplicatePassword, "")
+		writeErrorResponse(w, http.StatusBadRequest, ErrorDuplicatePassword)
 		return
 	}
 
@@ -112,4 +118,16 @@ func addPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeSuccessResponse(w, response, http.StatusCreated)
+}
+
+func deletePassword(w http.ResponseWriter, r *http.Request) {
+	var deletePasswordRequest DeletePasswordRequest
+	err := json.NewDecoder(r.Body).Decode(&deletePasswordRequest)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidJson)
+		return
+	}
+
+	var existingPassword StoredPassword
+
 }

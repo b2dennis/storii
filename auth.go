@@ -85,13 +85,13 @@ func jwtMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tokenString, err := extractJWTFromHeader(r)
 		if err != nil {
-			writeErrorResponse(w, http.StatusUnauthorized, "Unauthorized: "+err.Error(), "")
+			writeErrorResponse(w, http.StatusUnauthorized, "Unauthorized: "+err.Error())
 			return
 		}
 
 		claims, err := validateJWT(tokenString)
 		if err != nil {
-			writeErrorResponse(w, http.StatusUnauthorized, "Unauthorized: "+err.Error(), "")
+			writeErrorResponse(w, http.StatusUnauthorized, "Unauthorized: "+err.Error())
 			return
 		}
 
