@@ -63,3 +63,10 @@ type LoginResponse struct {
 	UserID   uint   `json:"user_id"`
 	Username string `json:"username"`
 }
+
+type AddPasswordRequest struct {
+	Name          string `json:"name"`
+	Value         string `json:"value"`
+	IV            string `json:"iv"`
+	AssociatedURL string `json:"associated_url"`
+}

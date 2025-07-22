@@ -16,6 +16,7 @@ const (
 	ErrorInvalidJson        = "invalid_json"
 	ErrorInvalidInput       = "invalid_input"
 	ErrorCreationFailed     = "creation_failed"
+	ErrorDuplicatePassword  = "duplicate_password_name"
 	ErrorUserExists         = "user_already_exists"
 	ErrorValidation         = "validation_error"
 	ErrorInternalServer     = "internal_server_error"
