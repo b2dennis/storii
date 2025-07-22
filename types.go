@@ -48,14 +48,14 @@ type ErrorResponse struct {
 }
 
 type SuccessResponse struct {
-	Message string `json:"message"`
+	Message string `json:"message,omitempty"`
 	Data    any    `json:"data"`
 }
 
 // Password max len of 72 because of bcrypt limitations
 type CreateUserRequest struct {
-	Username string `json:"username" validate:"min=4,max=32"`
-	Password string `json:"password" validate:"min=12,max=72"`
+	Username string `json:"username" validate:"required,min=4,max=32,username_format"`
+	Password string `json:"password" validate:"required,min=12,max=72,password_strength"`
 }
 
 type CreateUserSuccess struct {
@@ -64,8 +64,8 @@ type CreateUserSuccess struct {
 }
 
 type LoginRequest struct {
-	Username string `json:"username" validate:"min=4,max=32"`
-	Password string `json:"password" validate:"min=12,max=72"`
+	Username string `json:"username" validate:"required,min=4,max=32,username_format"`
+	Password string `json:"password" validate:"required,min=12,max=72,password_strength"`
 }
 
 type LoginSuccess struct {
@@ -86,10 +86,10 @@ type GetPasswordsSuccess struct {
 }
 
 type AddPasswordRequest struct {
-	Name          string `json:"name"`
-	Value         string `json:"value"`
-	IV            string `json:"iv"`
-	AssociatedURL string `json:"associated_url"`
+	Name          string `json:"name" validate:"required,min=1,max=100,password_name"`
+	Value         string `json:"value" validate:"required,min=1,max=1000"`
+	IV            string `json:"iv" validate:"required,min=16,max=32"`
+	AssociatedURL string `json:"associated_url" validate:"omitempty,url,max=2048"`
 }
 
 type AddPasswordSuccess struct {
@@ -97,5 +97,9 @@ type AddPasswordSuccess struct {
 }
 
 type DeletePasswordRequest struct {
-	Name string `json:"name" validate:"max=32,min=12"`
+	Name string `json:"name" validate:"min=1,max=100,password_name"`
+}
+
+type DeletePasswordSuccess struct {
+	Name string `json:"name"`
 }

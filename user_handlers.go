@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/mux"
 )
@@ -35,33 +36,34 @@ func registerUserHandlers(r *mux.Router) {
 func createUser(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	var requestBody CreateUserRequest
-	err := json.NewDecoder(r.Body).Decode(&requestBody)
+	var createUserRequest CreateUserRequest
+	err := json.NewDecoder(r.Body).Decode(&createUserRequest)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidJson)
 		return
 	}
 
-	if requestBody.Username == "" || requestBody.Password == "" {
-		writeErrorResponse(w, http.StatusBadRequest, ErrorUserPassMissing, "Username and password are required")
+	validationErrors := validateStruct(createUserRequest)
+	if len(validationErrors) > 0 {
+		writeErrorResponse(w, http.StatusBadRequest, ErrorValidation, strings.Join(validationErrors, "; "))
 		return
 	}
 
 	var existingUser User
-	result := db.Where("username = ?", requestBody.Username).First(&existingUser)
+	result := db.Where("username = ?", createUserRequest.Username).First(&existingUser)
 	if result.RowsAffected > 0 {
 		writeErrorResponse(w, http.StatusConflict, ErrorUserExists, "Username already exists")
 		return
 	}
 
-	passwordHash, err := hashPassword(requestBody.Password)
+	passwordHash, err := hashPassword(createUserRequest.Password)
 	if err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, ErrorInternalServer, "Failed to hash password")
 		return
 	}
 
 	newUser := &User{
-		Username:     requestBody.Username,
+		Username:     createUserRequest.Username,
 		PasswordHash: passwordHash,
 	}
 
@@ -82,26 +84,26 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 func loginUser(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	var requestBody LoginRequest
-	err := json.NewDecoder(r.Body).Decode(&requestBody)
+	var loginRequest LoginRequest
+	err := json.NewDecoder(r.Body).Decode(&loginRequest)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidJson, "")
 		return
 	}
 
-	if requestBody.Username == "" || requestBody.Password == "" {
-		writeErrorResponse(w, http.StatusBadRequest, ErrorUserPassMissing, "Username and password are required")
-		return
+	validationErrors := validateStruct(loginRequest)
+	if len(validationErrors) > 0 {
+		writeErrorResponse(w, http.StatusBadRequest, ErrorValidation, strings.Join(validationErrors, "; "))
 	}
 
 	var user User
-	result := db.Where("username = ?", requestBody.Username).First(&user)
+	result := db.Where("username = ?", loginRequest.Username).First(&user)
 	if result.RowsAffected == 0 {
 		writeErrorResponse(w, http.StatusUnauthorized, ErrorInvalidCredentials)
 		return
 	}
 
-	if !checkPasswordHash(requestBody.Password, user.PasswordHash) {
+	if !checkPasswordHash(loginRequest.Password, user.PasswordHash) {
 		writeErrorResponse(w, http.StatusUnauthorized, ErrorInvalidCredentials)
 		return
 	}

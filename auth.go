@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
 	"errors"
 	"net/http"
 	"strconv"
@@ -12,13 +11,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var jwtSecret []byte
-
-func initJWTSecret() {
-	jwtSecret = make([]byte, 32)
-	rand.Read(jwtSecret)
-}
-
 type Claims struct {
 	UserID   uint   `json:"user_id"`
 	Username string `json:"username"`
@@ -26,7 +18,7 @@ type Claims struct {
 }
 
 func generateJWT(user User) (string, error) {
-	expirationTime := time.Now().Add(24 * time.Hour)
+	expirationTime := time.Now().Add(config.JWTExpiry)
 	claims := &Claims{
 		UserID:   user.ID,
 		Username: user.Username,
@@ -37,13 +29,13 @@ func generateJWT(user User) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret)
+	return token.SignedString(config.JWTSecret)
 }
 
 func validateJWT(tokenString string) (*Claims, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
-		return jwtSecret, nil
+		return config.JWTSecret, nil
 	})
 
 	if err != nil {

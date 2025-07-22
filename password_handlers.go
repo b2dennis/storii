@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
 )
@@ -48,12 +49,6 @@ func getPasswords(w http.ResponseWriter, r *http.Request) {
 	var storedPasswords []StoredPassword
 	db.Where("user_id = ?", uint(UserID)).Find(&storedPasswords)
 
-	// TODO: Add better error handling (check if user exists instead)
-	if len(storedPasswords) == 0 {
-		writeErrorResponse(w, http.StatusInternalServerError, ErrorNotFound, "no passwords found")
-		return
-	}
-
 	responsePasswords := make([]ResponsePassword, len(storedPasswords))
 
 	for i, storedPassword := range storedPasswords {
@@ -84,6 +79,12 @@ func addPassword(w http.ResponseWriter, r *http.Request) {
 	err = json.NewDecoder(r.Body).Decode(&addPasswordRequest)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidJson)
+		return
+	}
+
+	validationErrors := validateStruct(addPasswordRequest)
+	if len(validationErrors) > 0 {
+		writeErrorResponse(w, http.StatusBadRequest, ErrorValidation, strings.Join(validationErrors, "; "))
 		return
 	}
 
@@ -121,13 +122,42 @@ func addPassword(w http.ResponseWriter, r *http.Request) {
 }
 
 func deletePassword(w http.ResponseWriter, r *http.Request) {
+	userIDStr := r.Header.Get(AuthHeaderUserID)
+	UserID, err := strconv.ParseUint(userIDStr, 10, 64)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidID, "Invalid user ID in token")
+		return
+	}
+
 	var deletePasswordRequest DeletePasswordRequest
-	err := json.NewDecoder(r.Body).Decode(&deletePasswordRequest)
+	err = json.NewDecoder(r.Body).Decode(&deletePasswordRequest)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidJson)
 		return
 	}
 
-	var existingPassword StoredPassword
+	validationErrors := validateStruct(deletePasswordRequest)
+	if len(validationErrors) > 0 {
+		writeErrorResponse(w, http.StatusBadRequest, ErrorValidation, strings.Join(validationErrors, "; "))
+		return
+	}
 
+	var existingPassword StoredPassword
+	result := db.Where("user_id = ? AND name = ?", UserID, deletePasswordRequest.Name).First(&existingPassword)
+	if result.RowsAffected == 0 {
+		writeErrorResponse(w, http.StatusNotFound, ErrorNotFound)
+		return
+	}
+
+	result = db.Delete(&existingPassword)
+	if result.RowsAffected == 0 {
+		writeErrorResponse(w, http.StatusInternalServerError, ErrorInternalServer, "Failed to delete password")
+		return
+	}
+
+	response := DeletePasswordSuccess{
+		Name: existingPassword.Name,
+	}
+
+	writeSuccessResponse(w, response)
 }

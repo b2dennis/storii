@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 	"gorm.io/driver/sqlite"
@@ -12,16 +13,21 @@ import (
 var db *gorm.DB
 
 var config Config = Config{
-	Address: ":9999",
+	Address:   ":9999",
+	DBPath:    "data.db",
+	JWTSecret: "b2dennis",
+	JWTExpiry: 24 * time.Hour,
 }
 
 func main() {
+	fmt.Println("Initializing validator")
+	initValidator()
+
 	fmt.Println("Initializing JWT secret")
-	initJWTSecret()
 
 	fmt.Println("Initializing DB connection")
 	var err error
-	db, err = gorm.Open(sqlite.Open("data.db"), &gorm.Config{})
+	db, err = gorm.Open(sqlite.Open(config.DBPath), &gorm.Config{})
 	if err != nil {
 		panic("failed to connect to database")
 	}
