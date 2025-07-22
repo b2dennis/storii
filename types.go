@@ -48,7 +48,7 @@ type CreateUserRequest struct {
 	Password string `json:"password"`
 }
 
-type CreateUserResponse struct {
+type CreateUserSuccess struct {
 	ID       uint   `json:"id"`
 	Username string `json:"username"`
 }
@@ -58,10 +58,21 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
-type LoginResponse struct {
+type LoginSuccess struct {
 	Token    string `json:"token"`
 	UserID   uint   `json:"user_id"`
 	Username string `json:"username"`
+}
+
+type ResponsePassword struct {
+	Name          string `json:"name"`
+	Value         string `json:"value"`
+	IV            string `json:"iv"`
+	AssociatedURL string `json:"associated_url,omitempty"`
+}
+
+type GetPasswordsSuccess struct {
+	Passwords []ResponsePassword `json:"passwords"`
 }
 
 type AddPasswordRequest struct {
@@ -69,4 +80,8 @@ type AddPasswordRequest struct {
 	Value         string `json:"value"`
 	IV            string `json:"iv"`
 	AssociatedURL string `json:"associated_url"`
+}
+
+type AddPasswordSuccess struct {
+	NewPassword ResponsePassword `json:"new_password"`
 }

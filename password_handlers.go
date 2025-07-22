@@ -1,6 +1,4 @@
 // Handlers for the Password subroute
-// TODO: Add proper getPasswords response
-// TODO: Add proper addPassword response
 
 package main
 
@@ -45,14 +43,28 @@ func getPasswords(w http.ResponseWriter, r *http.Request) {
 	var storedPasswords []StoredPassword
 	db.Where("user_id = ?", uint(UserID)).Find(&storedPasswords)
 
+	// TODO: Add better error handling (check if user exists instead)
 	if len(storedPasswords) == 0 {
 		writeErrorResponse(w, http.StatusInternalServerError, ErrorNotFound, "no passwords found")
 		return
 	}
 
-	for _, password := range storedPasswords {
-		fmt.Fprintf(w, "%s\n", password.Value)
+	responsePasswords := make([]ResponsePassword, len(storedPasswords))
+
+	for i, storedPassword := range storedPasswords {
+		responsePasswords[i] = ResponsePassword{
+			Name:          storedPassword.Name,
+			Value:         storedPassword.Value,
+			IV:            storedPassword.IV,
+			AssociatedURL: storedPassword.AssociatedURL,
+		}
 	}
+
+	response := GetPasswordsSuccess{
+		Passwords: responsePasswords,
+	}
+
+	writeSuccessResponse(w, response, http.StatusOK)
 }
 
 func addPassword(w http.ResponseWriter, r *http.Request) {
@@ -87,5 +99,17 @@ func addPassword(w http.ResponseWriter, r *http.Request) {
 	result = db.Create(newPassword)
 	if result.RowsAffected == 0 {
 		writeErrorResponse(w, http.StatusInternalServerError, ErrorCreationFailed, "Could not create password")
+		return
 	}
+
+	response := AddPasswordSuccess{
+		NewPassword: ResponsePassword{
+			Name:          newPassword.Name,
+			Value:         newPassword.Value,
+			IV:            newPassword.IV,
+			AssociatedURL: newPassword.AssociatedURL,
+		},
+	}
+
+	writeSuccessResponse(w, response, http.StatusCreated)
 }

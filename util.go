@@ -15,3 +15,14 @@ func writeErrorResponse(w http.ResponseWriter, statusCode int, errorCode, messag
 		Message: message,
 	})
 }
+
+func writeSuccessResponse(w http.ResponseWriter, data any, statusCodeOpt ...int) {
+	w.Header().Set("Content-Type", ContentTypeJSON)
+	statusCode := http.StatusOK
+	if len(statusCodeOpt) > 0 {
+		statusCode = statusCodeOpt[0]
+	}
+	w.WriteHeader(statusCode)
+
+	json.NewEncoder(w).Encode(data)
+}

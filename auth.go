@@ -92,6 +92,7 @@ func jwtMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		claims, err := validateJWT(tokenString)
 		if err != nil {
 			writeErrorResponse(w, http.StatusUnauthorized, "Unauthorized: "+err.Error(), "")
+			return
 		}
 
 		r.Header.Set(AuthHeaderUserID, strconv.FormatUint(uint64(claims.UserID), 10))

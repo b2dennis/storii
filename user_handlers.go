@@ -71,10 +71,12 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	response := CreateUserSuccess{
+		ID:       newUser.ID,
+		Username: newUser.Username,
+	}
 
-	json.NewEncoder(w).Encode(CreateUserResponse{ID: newUser.ID, Username: newUser.Username})
+	writeSuccessResponse(w, response, http.StatusCreated)
 }
 
 func loginUser(w http.ResponseWriter, r *http.Request) {
@@ -110,11 +112,10 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", ContentTypeJSON)
-	response := LoginResponse{
+	response := LoginSuccess{
 		Token:    token,
 		UserID:   user.ID,
 		Username: user.Username,
 	}
-	json.NewEncoder(w).Encode(response)
+	writeSuccessResponse(w, response)
 }
