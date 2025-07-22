@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -93,7 +94,7 @@ func jwtMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			writeErrorResponse(w, http.StatusUnauthorized, "Unauthorized: "+err.Error(), "")
 		}
 
-		r.Header.Set(AuthHeaderUserID, string(rune(claims.UserID)))
+		r.Header.Set(AuthHeaderUserID, strconv.FormatUint(uint64(claims.UserID), 10))
 		r.Header.Set(AuthHeaderUsername, claims.Username)
 
 		next.ServeHTTP(w, r)

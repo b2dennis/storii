@@ -1,4 +1,6 @@
 // Handlers for the Password subroute
+// TODO: Add proper getPasswords response
+// TODO: Add proper addPassword response
 
 package main
 
