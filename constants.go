@@ -26,6 +26,7 @@ const (
 	ErrorUnauthorized       = "unauthorized"
 	ErrorForbidden          = "forbidden"
 	ErrorNotFound           = "not_found"
+	ErrorRateLimit          = "rate_limit"
 )
 
 // Auth Error Codes

@@ -43,6 +43,8 @@ func main() {
 
 	fmt.Printf("Starting HTTP server at %s\n", config.Address)
 
+	r.Use(rateLimitMiddleware)
+
 	http.ListenAndServe(config.Address, handlers.CORS(
 		handlers.AllowCredentials(),
 		handlers.AllowedHeaders([]string{"GET", "POST", "PUT", "DELETE"}),

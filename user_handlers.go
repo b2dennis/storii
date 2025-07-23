@@ -28,6 +28,11 @@ var userHandlers []RequestHandlerStruct = []RequestHandlerStruct{
 		Method:  http.MethodDelete,
 		Route:   UserRouteDelete,
 	},
+	{
+		Handler: jwtMiddleware(updateUser),
+		Method:  http.MethodPut,
+		Route:   UserRouteUpdate,
+	},
 }
 
 func registerUserHandlers(r *mux.Router) {
