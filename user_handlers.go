@@ -38,7 +38,7 @@ var userHandlers []RequestHandlerStruct = []RequestHandlerStruct{
 func registerUserHandlers(r *mux.Router) {
 	subRouter := r.PathPrefix(SubrouteUser).Subrouter()
 	for _, handler := range userHandlers {
-		fmt.Printf("Added handler for route %s%s with method %s\n", SubrouteUser, handler.Route, handler.Method)
+		logger.Info(fmt.Sprintf("Added handler for route %s%s with method %s\n", SubrouteUser, handler.Route, handler.Method))
 		subRouter.HandleFunc(handler.Route, handler.Handler).Methods(handler.Method)
 		subRouter.HandleFunc(handler.Route+"/", handler.Handler).Methods(handler.Method)
 	}

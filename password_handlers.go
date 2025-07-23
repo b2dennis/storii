@@ -39,8 +39,9 @@ var passwordHandlers []RequestHandlerStruct = []RequestHandlerStruct{
 func registerPasswordHandlers(r *mux.Router) {
 	subRouter := r.PathPrefix(SubroutePassword).Subrouter()
 	for _, handler := range passwordHandlers {
-		fmt.Printf("Added handler for route %s%s with method %s\n", SubroutePassword, handler.Route, handler.Method)
+		logger.Info(fmt.Sprintf("Added handler for route %s%s with method %s\n", SubroutePassword, handler.Route, handler.Method))
 		subRouter.HandleFunc(handler.Route, handler.Handler).Methods(handler.Method)
+		subRouter.HandleFunc(handler.Route+"/", handler.Handler).Methods(handler.Method)
 	}
 }
 

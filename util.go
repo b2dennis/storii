@@ -5,6 +5,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 )
 
 func writeErrorResponse(w http.ResponseWriter, statusCode int, errorCode string, messageOpt ...string) {
@@ -14,6 +15,9 @@ func writeErrorResponse(w http.ResponseWriter, statusCode int, errorCode string,
 	if len(messageOpt) > 0 {
 		message = messageOpt[0]
 	}
+
+	logger.Warn(message, "statusCode", strconv.Itoa(statusCode), "errorCode", errorCode)
+
 	json.NewEncoder(w).Encode(ErrorResponse{
 		Error:   errorCode,
 		Message: message,
@@ -27,6 +31,8 @@ func writeSuccessResponse(w http.ResponseWriter, data any, statusCodeOpt ...int)
 		statusCode = statusCodeOpt[0]
 	}
 	w.WriteHeader(statusCode)
+
+	logger.Info(ResponseSuccess, "statusCode", strconv.Itoa(statusCode))
 
 	json.NewEncoder(w).Encode(SuccessResponse{
 		Data:    data,

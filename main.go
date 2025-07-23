@@ -24,33 +24,33 @@ var config Config = Config{
 }
 
 func main() {
-	fmt.Println("Reading .env file")
+	logger.Info("Reading .env file")
 	godotenv.Load()
 
-	fmt.Println("Loading config")
+	logger.Info("Loading config")
 	loadConfig()
 
-	fmt.Println("Initializing validator")
+	logger.Info("Initializing validator")
 	initValidator()
 
-	fmt.Println("Initializing JWT secret")
+	logger.Info("Initializing JWT secret")
 
-	fmt.Println("Initializing DB connection")
+	logger.Info("Initializing DB connection")
 	var err error
 	db, err = gorm.Open(sqlite.Open(config.DBPath), &gorm.Config{})
 	if err != nil {
 		panic("failed to connect to database")
 	}
 
-	fmt.Println("Running DB migrations")
+	logger.Info("Running DB migrations")
 	runDbMigrations()
 
-	fmt.Println("Initializing router")
+	logger.Info("Initializing router")
 	r := mux.NewRouter()
 
 	registerHandlers(r)
 
-	fmt.Printf("Starting HTTP server at %s\n", config.Address)
+	logger.Info(fmt.Sprintf("Starting HTTP server at %s\n", config.Address))
 
 	r.Use(rateLimitMiddleware)
 
