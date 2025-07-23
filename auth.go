@@ -29,13 +29,13 @@ func generateJWT(user User) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(config.JWTSecret)
+	return token.SignedString([]byte(config.JWTSecret))
 }
 
 func validateJWT(tokenString string) (*Claims, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
-		return config.JWTSecret, nil
+		return []byte(config.JWTSecret), nil
 	})
 
 	if err != nil {

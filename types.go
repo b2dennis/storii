@@ -37,7 +37,7 @@ type StoredPassword struct {
 }
 
 type User struct {
-	gorm.Model
+	gorm.Model      `validate:"-"`
 	Username        string           `gorm:"uniqueIndex;not null"`
 	PasswordHash    string           `gorm:"not null"`
 	StoredPasswords []StoredPassword `gorm:"foreignKey:UserID"`
