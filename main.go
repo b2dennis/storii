@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -42,7 +43,12 @@ func main() {
 
 	fmt.Printf("Starting HTTP server at %s\n", config.Address)
 
-	http.ListenAndServe(config.Address, r)
+	http.ListenAndServe(config.Address, handlers.CORS(
+		handlers.AllowCredentials(),
+		handlers.AllowedHeaders([]string{"GET", "POST", "PUT", "DELETE"}),
+		handlers.AllowedHeaders([]string{"Authorization"}),
+		handlers.AllowedOrigins([]string{"*"}),
+	)(r))
 }
 
 func registerHandlers(r *mux.Router) {
