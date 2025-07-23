@@ -76,6 +76,13 @@ type LoginSuccess struct {
 	Username string `json:"username"`
 }
 
+type DeleteUserSuccess struct {
+	UserID uint `json:"user_id"`
+}
+
+type UpdateUserRequest = CreateUserRequest
+type UpdateUserSuccess = CreateUserSuccess
+
 type ResponsePassword struct {
 	Name          string `json:"name"`
 	Value         string `json:"value"`
@@ -91,10 +98,10 @@ type GetPasswordsSuccess struct {
 
 type AddPasswordRequest struct {
 	Name          string `json:"name" validate:"required,min=1,max=100,password_name"`
-	Value         string `json:"value" validate:"hexadecimal,len=512"`
-	IV            string `json:"iv" validate:"hexadecimal,len=24"`
-	AuthTag       string `json:"auth_tag" validate:"hexadecimal,len=32"`
-	Salt          string `json:"salt" validate:"hexadecimal,len=32"`
+	Value         string `json:"value" validate:"required,hexadecimal,len=512"`
+	IV            string `json:"iv" validate:"required,hexadecimal,len=24"`
+	AuthTag       string `json:"auth_tag" validate:"required,hexadecimal,len=32"`
+	Salt          string `json:"salt" validate:"required,hexadecimal,len=32"`
 	AssociatedURL string `json:"associated_url" validate:"omitempty,url,max=2048"`
 }
 
@@ -103,9 +110,16 @@ type AddPasswordSuccess struct {
 }
 
 type DeletePasswordRequest struct {
-	Name string `json:"name" validate:"min=1,max=100,password_name"`
+	Name string `json:"name" validate:"required,min=1,max=100,password_name"`
 }
 
 type DeletePasswordSuccess struct {
 	Name string `json:"name"`
 }
+
+type UpdatePasswordRequest struct {
+	AddPasswordRequest
+	NewName string `json:"new_name" validate:"required,min=1,max=100,password_name"`
+}
+
+type UpdatePasswordSuccess = AddPasswordSuccess

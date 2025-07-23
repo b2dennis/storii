@@ -29,6 +29,11 @@ var passwordHandlers []RequestHandlerStruct = []RequestHandlerStruct{
 		Method:  http.MethodDelete,
 		Route:   PasswordRouteDelete,
 	},
+	{
+		Handler: jwtMiddleware(updatePassword),
+		Method:  http.MethodPut,
+		Route:   PasswordRouteUpdate,
+	},
 }
 
 func registerPasswordHandlers(r *mux.Router) {
@@ -188,6 +193,85 @@ func deletePassword(w http.ResponseWriter, r *http.Request) {
 
 	response := DeletePasswordSuccess{
 		Name: existingPassword.Name,
+	}
+
+	writeSuccessResponse(w, response)
+}
+
+func updatePassword(w http.ResponseWriter, r *http.Request) {
+	UserIDStr := r.Header.Get(AuthHeaderUserID)
+	UserID, err := strconv.ParseUint(UserIDStr, 10, 64)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidID, "Invalid user ID in token")
+		return
+	}
+
+	var updatePasswordRequest UpdatePasswordRequest
+	err = json.NewDecoder(r.Body).Decode(&updatePasswordRequest)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidJson)
+		return
+	}
+
+	validationErrors := validateStruct(updatePasswordRequest)
+	if len(validationErrors) > 0 {
+		writeErrorResponse(w, http.StatusBadRequest, ErrorValidation, strings.Join(validationErrors, "; "))
+		return
+	}
+
+	var existingPassword StoredPassword
+	result := db.Where("user_id = ? AND name = ?", UserID, updatePasswordRequest.Name).First(&existingPassword)
+	if result.RowsAffected == 0 {
+		writeErrorResponse(w, http.StatusNotFound, ErrorNotFound)
+		return
+	}
+
+	value, err := hex.DecodeString(updatePasswordRequest.Value)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, ErrorInternalServer, "Could not transform password value to byte array")
+		return
+	}
+
+	iv, err := hex.DecodeString(updatePasswordRequest.IV)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, ErrorInternalServer, "Could not transform password IV to byte array")
+		return
+	}
+
+	authTag, err := hex.DecodeString(updatePasswordRequest.AuthTag)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, ErrorInternalServer, "Could not transform password auth tag to byte array")
+		return
+	}
+
+	salt, err := hex.DecodeString(updatePasswordRequest.Salt)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, ErrorInternalServer, "Could not transform keygen salt to byte array")
+		return
+	}
+
+	existingPassword.Name = updatePasswordRequest.NewName
+	existingPassword.Value = value
+	existingPassword.IV = iv
+	existingPassword.AuthTag = authTag
+	existingPassword.Salt = salt
+	existingPassword.AssociatedURL = updatePasswordRequest.AssociatedURL
+
+	result = db.Save(existingPassword)
+	if result.RowsAffected == 0 {
+		writeErrorResponse(w, http.StatusInternalServerError, ErrorCreationFailed, "Could not create password")
+		return
+	}
+
+	response := UpdatePasswordSuccess{
+		NewPassword: ResponsePassword{
+			Name:          existingPassword.Name,
+			Value:         hex.EncodeToString(existingPassword.Value),
+			IV:            hex.EncodeToString(existingPassword.IV),
+			AuthTag:       hex.EncodeToString(existingPassword.AuthTag),
+			Salt:          hex.EncodeToString(existingPassword.Salt),
+			AssociatedURL: existingPassword.AssociatedURL,
+		},
 	}
 
 	writeSuccessResponse(w, response)

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -21,6 +22,11 @@ var userHandlers []RequestHandlerStruct = []RequestHandlerStruct{
 		Handler: loginUser,
 		Method:  http.MethodPost,
 		Route:   UserRouteLogin,
+	},
+	{
+		Handler: jwtMiddleware(deleteUser),
+		Method:  http.MethodDelete,
+		Route:   UserRouteDelete,
 	},
 }
 
@@ -119,5 +125,78 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 		UserID:   user.ID,
 		Username: user.Username,
 	}
+	writeSuccessResponse(w, response)
+}
+
+func deleteUser(w http.ResponseWriter, r *http.Request) {
+	userIDStr := r.Header.Get(AuthHeaderUserID)
+	UserID, err := strconv.ParseUint(userIDStr, 10, 64)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidID, "Invalid user ID in token")
+		return
+	}
+
+	var existingUser User
+	result := db.Where("id = ?", UserID).First(&existingUser)
+	if result.RowsAffected == 0 {
+		writeErrorResponse(w, http.StatusNotFound, ErrorNotFound)
+		return
+	}
+
+	result = db.Delete(&existingUser)
+
+	response := DeleteUserSuccess{
+		UserID: existingUser.ID,
+	}
+
+	writeSuccessResponse(w, response)
+}
+
+func updateUser(w http.ResponseWriter, r *http.Request) {
+	userIDStr := r.Header.Get(AuthHeaderUserID)
+	UserID, err := strconv.ParseUint(userIDStr, 10, 64)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidID, "Invalid user ID in token")
+		return
+	}
+
+	var updateUserRequest UpdateUserRequest
+	err = json.NewDecoder(r.Body).Decode(&updateUserRequest)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidJson, "")
+		return
+	}
+
+	validationErrors := validateStruct(updateUserRequest)
+	if len(validationErrors) > 0 {
+		writeErrorResponse(w, http.StatusBadRequest, ErrorValidation, strings.Join(validationErrors, "; "))
+	}
+
+	var existingUser User
+	result := db.Where("id = ?", UserID).First(&existingUser)
+	if result.RowsAffected == 0 {
+		writeErrorResponse(w, http.StatusNotFound, ErrorNotFound)
+		return
+	}
+
+	password, err := hashPassword(updateUserRequest.Password)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, ErrorInternalServer, "Could not hash password")
+		return
+	}
+
+	existingUser.Username = updateUserRequest.Username
+	existingUser.PasswordHash = password
+
+	result = db.Save(&existingUser)
+	if result.RowsAffected == 0 {
+		writeErrorResponse(w, http.StatusInternalServerError, ErrorInternalServer, "Could not update user DB entry")
+	}
+
+	response := UpdateUserSuccess{
+		ID:       existingUser.ID,
+		Username: existingUser.Username,
+	}
+
 	writeSuccessResponse(w, response)
 }

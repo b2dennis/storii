@@ -45,6 +45,8 @@ const (
 const (
 	UserRouteRegister = "/register"
 	UserRouteLogin    = "/login"
+	UserRouteDelete   = "/delete"
+	UserRouteUpdate   = "/update"
 )
 
 // Password Routes
@@ -52,6 +54,7 @@ const (
 	PasswordRouteFetch  = ""
 	PasswordRouteAdd    = "/create"
 	PasswordRouteDelete = "/delete"
+	PasswordRouteUpdate = "/update"
 )
 
 // Middleware Headers
