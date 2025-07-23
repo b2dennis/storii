@@ -2,6 +2,14 @@
 
 package main
 
+// Env Var Names
+const (
+	VarAddress   = "ADDRESS"
+	VarDBPath    = "DBPATH"
+	VarJWTSecret = "JWTSECRET"
+	VarJWTExpiry = "JWTEXPIRY"
+)
+
 // Content Types
 const (
 	ContentTypeJSON = "application/json"

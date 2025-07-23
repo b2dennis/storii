@@ -3,10 +3,13 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -21,6 +24,12 @@ var config Config = Config{
 }
 
 func main() {
+	fmt.Println("Reading .env file")
+	godotenv.Load()
+
+	fmt.Println("Loading config")
+	loadConfig()
+
 	fmt.Println("Initializing validator")
 	initValidator()
 
@@ -61,4 +70,30 @@ func registerHandlers(r *mux.Router) {
 func runDbMigrations() {
 	db.AutoMigrate(&StoredPassword{})
 	db.AutoMigrate(&User{})
+}
+
+func loadConfig() {
+	address := os.Getenv(VarAddress)
+	dbPath := os.Getenv(VarDBPath)
+	jwtSecret := os.Getenv(VarJWTSecret)
+	jwtExpiry := os.Getenv(VarJWTExpiry)
+
+	if address != "" {
+		config.Address = address
+	}
+
+	if dbPath != "" {
+		config.DBPath = dbPath
+	}
+
+	if jwtSecret != "" {
+		config.JWTSecret = jwtSecret
+	}
+
+	if jwtExpiry != "" {
+		hours, err := strconv.Atoi(jwtExpiry)
+		if err == nil {
+			config.JWTExpiry = time.Hour * time.Duration(hours)
+		}
+	}
 }
