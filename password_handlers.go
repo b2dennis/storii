@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -54,8 +55,10 @@ func getPasswords(w http.ResponseWriter, r *http.Request) {
 	for i, storedPassword := range storedPasswords {
 		responsePasswords[i] = ResponsePassword{
 			Name:          storedPassword.Name,
-			Value:         storedPassword.Value,
-			IV:            storedPassword.IV,
+			Value:         hex.EncodeToString(storedPassword.Value),
+			IV:            hex.EncodeToString(storedPassword.IV),
+			AuthTag:       hex.EncodeToString(storedPassword.AuthTag),
+			Salt:          hex.EncodeToString(storedPassword.Salt),
 			AssociatedURL: storedPassword.AssociatedURL,
 		}
 	}
@@ -95,11 +98,37 @@ func addPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	value, err := hex.DecodeString(addPasswordRequest.Value)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, ErrorInternalServer, "Could not transform password value to byte array")
+		return
+	}
+
+	iv, err := hex.DecodeString(addPasswordRequest.IV)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, ErrorInternalServer, "Could not transform password IV to byte array")
+		return
+	}
+
+	authTag, err := hex.DecodeString(addPasswordRequest.AuthTag)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, ErrorInternalServer, "Could not transform password auth tag to byte array")
+		return
+	}
+
+	salt, err := hex.DecodeString(addPasswordRequest.Salt)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, ErrorInternalServer, "Could not transform keygen salt to byte array")
+		return
+	}
+
 	newPassword := &StoredPassword{
 		UserID:        uint(UserID),
 		Name:          addPasswordRequest.Name,
-		Value:         addPasswordRequest.Value,
-		IV:            addPasswordRequest.IV,
+		Value:         value,
+		IV:            iv,
+		AuthTag:       authTag,
+		Salt:          salt,
 		AssociatedURL: addPasswordRequest.AssociatedURL,
 	}
 
@@ -112,8 +141,10 @@ func addPassword(w http.ResponseWriter, r *http.Request) {
 	response := AddPasswordSuccess{
 		NewPassword: ResponsePassword{
 			Name:          newPassword.Name,
-			Value:         newPassword.Value,
-			IV:            newPassword.IV,
+			Value:         hex.EncodeToString(newPassword.Value),
+			IV:            hex.EncodeToString(newPassword.IV),
+			AuthTag:       hex.EncodeToString(newPassword.AuthTag),
+			Salt:          hex.EncodeToString(newPassword.Salt),
 			AssociatedURL: newPassword.AssociatedURL,
 		},
 	}

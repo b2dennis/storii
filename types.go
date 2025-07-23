@@ -29,8 +29,10 @@ type StoredPassword struct {
 	gorm.Model
 	UserID        uint   `gorm:"not null"`
 	Name          string `gorm:"not null"`
-	Value         string `gorm:"not null"`
-	IV            string `gorm:"not null"`
+	Value         []byte `gorm:"type:VARBINARY(256);not null"`
+	IV            []byte `gorm:"type:BINARY(12);not null"`
+	AuthTag       []byte `gorm:"type:BINARY(16);not null"`
+	Salt          []byte `gorm:"type:BINARY(16);not null"`
 	AssociatedURL string
 }
 
@@ -78,6 +80,8 @@ type ResponsePassword struct {
 	Name          string `json:"name"`
 	Value         string `json:"value"`
 	IV            string `json:"iv"`
+	AuthTag       string `json:"auth_tag"`
+	Salt          string `json:"salt"`
 	AssociatedURL string `json:"associated_url,omitempty"`
 }
 
@@ -87,8 +91,10 @@ type GetPasswordsSuccess struct {
 
 type AddPasswordRequest struct {
 	Name          string `json:"name" validate:"required,min=1,max=100,password_name"`
-	Value         string `json:"value" validate:"required,min=1,max=1000"`
-	IV            string `json:"iv" validate:"required,min=16,max=32"`
+	Value         string `json:"value" validate:"hexadecimal,len=512"`
+	IV            string `json:"iv" validate:"hexadecimal,len=24"`
+	AuthTag       string `json:"auth_tag" validate:"hexadecimal,len=32"`
+	Salt          string `json:"salt" validate:"hexadecimal,len=32"`
 	AssociatedURL string `json:"associated_url" validate:"omitempty,url,max=2048"`
 }
 
