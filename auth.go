@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -43,7 +44,7 @@ func validateJWT(tokenString string) (*Claims, error) {
 	}
 
 	if !token.Valid {
-		return nil, errors.New(AuthErrorInvalidToken)
+		return nil, errors.New(ErrorInvalidToken)
 	}
 
 	return claims, nil
@@ -52,12 +53,12 @@ func validateJWT(tokenString string) (*Claims, error) {
 func extractJWTFromHeader(r *http.Request) (string, error) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
-		return "", errors.New(AuthErrorHeaderMissing)
+		return "", errors.New(ErrorAuthHeaderMissing)
 	}
 
 	parts := strings.Split(authHeader, " ")
 	if len(parts) != 2 || parts[0] != "Bearer" {
-		return "", errors.New(AuthErrorHeaderInvalid)
+		return "", errors.New(ErrorAuthHeaderInvalid)
 	}
 
 	return parts[1], nil
@@ -77,15 +78,18 @@ func jwtMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tokenString, err := extractJWTFromHeader(r)
 		if err != nil {
-			writeErrorResponse(w, http.StatusUnauthorized, "Unauthorized: "+err.Error())
+			writeErrorResponse(r.Context(), w, http.StatusUnauthorized, "Unauthorized: "+err.Error())
 			return
 		}
 
 		claims, err := validateJWT(tokenString)
 		if err != nil {
-			writeErrorResponse(w, http.StatusUnauthorized, "Unauthorized: "+err.Error())
+			writeErrorResponse(r.Context(), w, http.StatusUnauthorized, "Unauthorized: "+err.Error())
 			return
 		}
+
+		r = r.WithContext(context.WithValue(r.Context(), ContextKeyUserID, uint64(claims.UserID)))
+		r = r.WithContext(context.WithValue(r.Context(), ContextKeyUsername, claims.Username))
 
 		r.Header.Set(AuthHeaderUserID, strconv.FormatUint(uint64(claims.UserID), 10))
 		r.Header.Set(AuthHeaderUsername, claims.Username)

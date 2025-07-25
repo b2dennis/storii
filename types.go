@@ -3,8 +3,11 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"time"
+
+	"log/slog"
 
 	"gorm.io/gorm"
 )
@@ -123,3 +126,47 @@ type UpdatePasswordRequest struct {
 }
 
 type UpdatePasswordSuccess = AddPasswordSuccess
+
+// Context Key
+type ContextKey = string
+
+// Logger
+
+type ContextHandler struct {
+	handler slog.Handler
+}
+
+func (h *ContextHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.handler.Enabled(ctx, level)
+}
+
+func (h *ContextHandler) Handle(ctx context.Context, record slog.Record) error {
+	if requestId := ctx.Value(ContextKeyRequestId); requestId != nil {
+		record.AddAttrs(slog.Any(ContextKeyRequestId, requestId))
+	}
+	if ipAddress := ctx.Value(ContextKeyIPAddress); ipAddress != nil {
+		record.AddAttrs(slog.String(ContextKeyIPAddress, ipAddress.(string)))
+	}
+	if path := ctx.Value(ContextKeyPath); path != nil {
+		record.AddAttrs(slog.String(ContextKeyPath, path.(string)))
+	}
+	if method := ctx.Value(ContextKeyMethod); method != nil {
+		record.AddAttrs(slog.String(ContextKeyMethod, method.(string)))
+	}
+	if userId := ctx.Value(ContextKeyUserID); userId != nil {
+		record.AddAttrs(slog.Uint64(ContextKeyUserID, userId.(uint64)))
+	}
+	if username := ctx.Value(ContextKeyUsername); username != nil {
+		record.AddAttrs(slog.String(ContextKeyUsername, username.(string)))
+	}
+
+	return h.handler.Handle(ctx, record)
+}
+
+func (h *ContextHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &ContextHandler{handler: h.handler.WithAttrs(attrs)}
+}
+
+func (h *ContextHandler) WithGroup(name string) slog.Handler {
+	return &ContextHandler{handler: h.handler.WithGroup(name)}
+}

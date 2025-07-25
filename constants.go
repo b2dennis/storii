@@ -35,19 +35,15 @@ const (
 	ErrorForbidden          = "forbidden"
 	ErrorNotFound           = "not_found"
 	ErrorRateLimit          = "rate_limit"
-)
-
-// Auth Error Codes
-const (
-	AuthErrorInvalidToken  = "invalid_token"
-	AuthErrorHeaderMissing = "auth_header_missing"
-	AuthErrorHeaderInvalid = "auth_header_invalid"
+	ErrorInvalidToken       = "invalid_token"
+	ErrorAuthHeaderMissing  = "auth_header_missing"
+	ErrorAuthHeaderInvalid  = "auth_header_invalid"
 )
 
 // API Subroutes
 const (
-	SubrouteUser     = "/user"
-	SubroutePassword = "/password"
+	RouteUser     = "/user"
+	RoutePassword = "/password"
 )
 
 // User Routes
@@ -70,4 +66,33 @@ const (
 const (
 	AuthHeaderUserID   = "X-User-ID"
 	AuthHeaderUsername = "X-Username"
+)
+
+// Logging Messages
+const (
+	MessageNewRequest      = "new_request"
+	MessageRateLimited     = "rate_limit"
+	MessageRouteRegistered = "route_registered"
+	MessageNewUserCreated  = "new_user_created"
+	MessageUserLogin       = "user_login"
+	MessageUserDeleted     = "user_deleted"
+)
+
+// Logging Keys
+const (
+	LogKeyRoute    = "route"
+	LogKeySubroute = "subroute"
+	LogKeyMethod   = "method"
+	LogKeyUsername = "username"
+	LogKeyUserID   = "user_id"
+)
+
+// Context Keys
+const (
+	ContextKeyRequestId ContextKey = "request_id"
+	ContextKeyIPAddress ContextKey = "ip_address"
+	ContextKeyPath      ContextKey = "route"
+	ContextKeyMethod    ContextKey = "method"
+	ContextKeyUsername  ContextKey = "username"
+	ContextKeyUserID    ContextKey = "user_id"
 )

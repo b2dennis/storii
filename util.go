@@ -3,12 +3,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
 )
 
-func writeErrorResponse(w http.ResponseWriter, statusCode int, errorCode string, messageOpt ...string) {
+func writeErrorResponse(ctx context.Context, w http.ResponseWriter, statusCode int, errorCode string, messageOpt ...string) {
 	w.Header().Set("Content-Type", ContentTypeJSON)
 	w.WriteHeader(statusCode)
 	message := ""
@@ -16,7 +17,7 @@ func writeErrorResponse(w http.ResponseWriter, statusCode int, errorCode string,
 		message = messageOpt[0]
 	}
 
-	logger.Warn(message, "statusCode", strconv.Itoa(statusCode), "errorCode", errorCode)
+	contextLogger.ErrorContext(ctx, message, "statusCode", strconv.Itoa(statusCode), "errorCode", errorCode)
 
 	json.NewEncoder(w).Encode(ErrorResponse{
 		Error:   errorCode,
@@ -24,7 +25,7 @@ func writeErrorResponse(w http.ResponseWriter, statusCode int, errorCode string,
 	})
 }
 
-func writeSuccessResponse(w http.ResponseWriter, data any, statusCodeOpt ...int) {
+func writeSuccessResponse(ctx context.Context, w http.ResponseWriter, data any, statusCodeOpt ...int) {
 	w.Header().Set("Content-Type", ContentTypeJSON)
 	statusCode := http.StatusOK
 	if len(statusCodeOpt) > 0 {
@@ -32,7 +33,7 @@ func writeSuccessResponse(w http.ResponseWriter, data any, statusCodeOpt ...int)
 	}
 	w.WriteHeader(statusCode)
 
-	logger.Info(ResponseSuccess, "statusCode", strconv.Itoa(statusCode))
+	contextLogger.InfoContext(ctx, ResponseSuccess, "statusCode", strconv.Itoa(statusCode))
 
 	json.NewEncoder(w).Encode(SuccessResponse{
 		Data:    data,

@@ -12,6 +12,7 @@ import (
 	"github.com/joho/godotenv"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 var db *gorm.DB
@@ -24,35 +25,37 @@ var config Config = Config{
 }
 
 func main() {
-	logger.Info("Reading .env file")
+	contextLogger.Info("Reading .env file")
 	godotenv.Load()
 
-	logger.Info("Loading config")
+	contextLogger.Info("Loading config")
 	loadConfig()
 
-	logger.Info("Initializing validator")
+	contextLogger.Info("Initializing validator")
 	initValidator()
 
-	logger.Info("Initializing JWT secret")
+	contextLogger.Info("Initializing JWT secret")
 
-	logger.Info("Initializing DB connection")
+	contextLogger.Info("Initializing DB connection")
 	var err error
-	db, err = gorm.Open(sqlite.Open(config.DBPath), &gorm.Config{})
+	db, err = gorm.Open(sqlite.Open(config.DBPath), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
 	if err != nil {
 		panic("failed to connect to database")
 	}
 
-	logger.Info("Running DB migrations")
+	contextLogger.Info("Running DB migrations")
 	runDbMigrations()
 
-	logger.Info("Initializing router")
+	contextLogger.Info("Initializing router")
 	r := mux.NewRouter()
 
 	registerHandlers(r)
 
-	logger.Info(fmt.Sprintf("Starting HTTP server at %s\n", config.Address))
+	contextLogger.Info(fmt.Sprintf("Starting HTTP server at %s\n", config.Address))
 
-	r.Use(rateLimitMiddleware)
+	r.Use(contextMiddleware, loggingMiddleware, rateLimitMiddleware)
 
 	http.ListenAndServe(config.Address, handlers.CORS(
 		handlers.AllowCredentials(),

@@ -4,7 +4,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -36,9 +35,9 @@ var userHandlers []RequestHandlerStruct = []RequestHandlerStruct{
 }
 
 func registerUserHandlers(r *mux.Router) {
-	subRouter := r.PathPrefix(SubrouteUser).Subrouter()
+	subRouter := r.PathPrefix(RouteUser).Subrouter()
 	for _, handler := range userHandlers {
-		logger.Info(fmt.Sprintf("Added handler for route %s%s with method %s\n", SubrouteUser, handler.Route, handler.Method))
+		contextLogger.Info(MessageRouteRegistered, LogKeyRoute, RouteUser, LogKeySubroute, handler.Route, LogKeyMethod, handler.Method)
 		subRouter.HandleFunc(handler.Route, handler.Handler).Methods(handler.Method)
 		subRouter.HandleFunc(handler.Route+"/", handler.Handler).Methods(handler.Method)
 	}
@@ -50,26 +49,26 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	var createUserRequest CreateUserRequest
 	err := json.NewDecoder(r.Body).Decode(&createUserRequest)
 	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidJson)
+		writeErrorResponse(r.Context(), w, http.StatusBadRequest, ErrorInvalidJson)
 		return
 	}
 
 	validationErrors := validateStruct(createUserRequest)
 	if len(validationErrors) > 0 {
-		writeErrorResponse(w, http.StatusBadRequest, ErrorValidation, strings.Join(validationErrors, "; "))
+		writeErrorResponse(r.Context(), w, http.StatusBadRequest, ErrorValidation, strings.Join(validationErrors, "; "))
 		return
 	}
 
 	var existingUser User
 	result := db.Where("username = ?", createUserRequest.Username).First(&existingUser)
 	if result.RowsAffected > 0 {
-		writeErrorResponse(w, http.StatusConflict, ErrorUserExists, "Username already exists")
+		writeErrorResponse(r.Context(), w, http.StatusConflict, ErrorUserExists, "Username already exists")
 		return
 	}
 
 	passwordHash, err := hashPassword(createUserRequest.Password)
 	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, ErrorInternalServer, "Failed to hash password")
+		writeErrorResponse(r.Context(), w, http.StatusInternalServerError, ErrorInternalServer, "Failed to hash password")
 		return
 	}
 
@@ -80,7 +79,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 
 	result = db.Create(newUser)
 	if result.RowsAffected == 0 {
-		writeErrorResponse(w, http.StatusInternalServerError, ErrorCreationFailed, "User creation failed")
+		writeErrorResponse(r.Context(), w, http.StatusInternalServerError, ErrorCreationFailed, "User creation failed")
 		return
 	}
 
@@ -89,7 +88,8 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 		Username: newUser.Username,
 	}
 
-	writeSuccessResponse(w, response, http.StatusCreated)
+	contextLogger.InfoContext(r.Context(), MessageNewUserCreated, LogKeyUsername, response.Username, LogKeyUserID, response.ID)
+	writeSuccessResponse(r.Context(), w, response, http.StatusCreated)
 }
 
 func loginUser(w http.ResponseWriter, r *http.Request) {
@@ -98,30 +98,30 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 	var loginRequest LoginRequest
 	err := json.NewDecoder(r.Body).Decode(&loginRequest)
 	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidJson, "")
+		writeErrorResponse(r.Context(), w, http.StatusBadRequest, ErrorInvalidJson, "")
 		return
 	}
 
 	validationErrors := validateStruct(loginRequest)
 	if len(validationErrors) > 0 {
-		writeErrorResponse(w, http.StatusBadRequest, ErrorValidation, strings.Join(validationErrors, "; "))
+		writeErrorResponse(r.Context(), w, http.StatusBadRequest, ErrorValidation, strings.Join(validationErrors, "; "))
 	}
 
 	var user User
 	result := db.Where("username = ?", loginRequest.Username).First(&user)
 	if result.RowsAffected == 0 {
-		writeErrorResponse(w, http.StatusUnauthorized, ErrorInvalidCredentials)
+		writeErrorResponse(r.Context(), w, http.StatusUnauthorized, ErrorInvalidCredentials)
 		return
 	}
 
 	if !checkPasswordHash(loginRequest.Password, user.PasswordHash) {
-		writeErrorResponse(w, http.StatusUnauthorized, ErrorInvalidCredentials)
+		writeErrorResponse(r.Context(), w, http.StatusUnauthorized, ErrorInvalidCredentials)
 		return
 	}
 
 	token, err := generateJWT(user)
 	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, ErrorInternalServer, "Failed to generate token")
+		writeErrorResponse(r.Context(), w, http.StatusInternalServerError, ErrorInternalServer, "Failed to generate token")
 		return
 	}
 
@@ -130,21 +130,23 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 		UserID:   user.ID,
 		Username: user.Username,
 	}
-	writeSuccessResponse(w, response)
+
+	contextLogger.InfoContext(r.Context(), MessageUserLogin, LogKeyUsername, response.Username, LogKeyUserID, response.UserID)
+	writeSuccessResponse(r.Context(), w, response)
 }
 
 func deleteUser(w http.ResponseWriter, r *http.Request) {
 	userIDStr := r.Header.Get(AuthHeaderUserID)
 	UserID, err := strconv.ParseUint(userIDStr, 10, 64)
 	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidID, "Invalid user ID in token")
+		writeErrorResponse(r.Context(), w, http.StatusBadRequest, ErrorInvalidID, "Invalid user ID in token")
 		return
 	}
 
 	var existingUser User
 	result := db.Where("id = ?", UserID).First(&existingUser)
 	if result.RowsAffected == 0 {
-		writeErrorResponse(w, http.StatusNotFound, ErrorNotFound)
+		writeErrorResponse(r.Context(), w, http.StatusNotFound, ErrorNotFound)
 		return
 	}
 
@@ -154,39 +156,42 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 		UserID: existingUser.ID,
 	}
 
-	writeSuccessResponse(w, response)
+	contextLogger.InfoContext(r.Context(), MessageUserDeleted)
+	writeSuccessResponse(r.Context(), w, response)
 }
 
 func updateUser(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
 	userIDStr := r.Header.Get(AuthHeaderUserID)
 	UserID, err := strconv.ParseUint(userIDStr, 10, 64)
 	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidID, "Invalid user ID in token")
+		writeErrorResponse(r.Context(), w, http.StatusBadRequest, ErrorInvalidID, "Invalid user ID in token")
 		return
 	}
 
 	var updateUserRequest UpdateUserRequest
 	err = json.NewDecoder(r.Body).Decode(&updateUserRequest)
 	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, ErrorInvalidJson, "")
+		writeErrorResponse(r.Context(), w, http.StatusBadRequest, ErrorInvalidJson, "")
 		return
 	}
 
 	validationErrors := validateStruct(updateUserRequest)
 	if len(validationErrors) > 0 {
-		writeErrorResponse(w, http.StatusBadRequest, ErrorValidation, strings.Join(validationErrors, "; "))
+		writeErrorResponse(r.Context(), w, http.StatusBadRequest, ErrorValidation, strings.Join(validationErrors, "; "))
 	}
 
 	var existingUser User
 	result := db.Where("id = ?", UserID).First(&existingUser)
 	if result.RowsAffected == 0 {
-		writeErrorResponse(w, http.StatusNotFound, ErrorNotFound)
+		writeErrorResponse(r.Context(), w, http.StatusNotFound, ErrorNotFound)
 		return
 	}
 
 	password, err := hashPassword(updateUserRequest.Password)
 	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, ErrorInternalServer, "Could not hash password")
+		writeErrorResponse(r.Context(), w, http.StatusInternalServerError, ErrorInternalServer, "Could not hash password")
 		return
 	}
 
@@ -195,7 +200,7 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 
 	result = db.Save(&existingUser)
 	if result.RowsAffected == 0 {
-		writeErrorResponse(w, http.StatusInternalServerError, ErrorInternalServer, "Could not update user DB entry")
+		writeErrorResponse(r.Context(), w, http.StatusInternalServerError, ErrorInternalServer, "Could not update user DB entry")
 	}
 
 	response := UpdateUserSuccess{
@@ -203,5 +208,5 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		Username: existingUser.Username,
 	}
 
-	writeSuccessResponse(w, response)
+	writeSuccessResponse(r.Context(), w, response)
 }
