@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -88,7 +89,10 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 		Username: newUser.Username,
 	}
 
-	contextLogger.InfoContext(r.Context(), MessageNewUserCreated, LogKeyUsername, response.Username, LogKeyUserID, response.ID)
+	r = r.WithContext(context.WithValue(r.Context(), ContextKeyUsername, response.Username))
+	r = r.WithContext(context.WithValue(r.Context(), ContextKeyUserID, response.ID))
+
+	contextLogger.InfoContext(r.Context(), MessageUserCreated)
 	writeSuccessResponse(r.Context(), w, response, http.StatusCreated)
 }
 
@@ -131,7 +135,10 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 		Username: user.Username,
 	}
 
-	contextLogger.InfoContext(r.Context(), MessageUserLogin, LogKeyUsername, response.Username, LogKeyUserID, response.UserID)
+	r = r.WithContext(context.WithValue(r.Context(), ContextKeyUsername, user.Username))
+	r = r.WithContext(context.WithValue(r.Context(), ContextKeyUserID, uint64(user.ID)))
+
+	contextLogger.InfoContext(r.Context(), MessageUserCreated)
 	writeSuccessResponse(r.Context(), w, response)
 }
 
@@ -208,5 +215,6 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		Username: existingUser.Username,
 	}
 
+	contextLogger.InfoContext(r.Context(), MessageUserUpdated, LogKeyNewUsername, existingUser.Username)
 	writeSuccessResponse(r.Context(), w, response)
 }

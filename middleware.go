@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"os"
 
 	"github.com/google/uuid"
 	"golang.org/x/time/rate"
@@ -28,9 +27,14 @@ func contextMiddleware(next http.Handler) http.Handler {
 var handlerOptions *slog.HandlerOptions = &slog.HandlerOptions{
 	AddSource: true,
 }
-var contextLogger *slog.Logger = slog.New(&ContextHandler{
-	slog.NewTextHandler(os.Stdout, handlerOptions),
-})
+
+var contextLogger *slog.Logger
+
+func initLogger() {
+	contextLogger = slog.New(&ContextHandler{
+		slog.NewTextHandler(config.LogOutput, handlerOptions),
+	})
+}
 
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

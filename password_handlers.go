@@ -72,6 +72,7 @@ func getPasswords(w http.ResponseWriter, r *http.Request) {
 		Passwords: responsePasswords,
 	}
 
+	contextLogger.InfoContext(r.Context(), MessagePasswordsFetched)
 	writeSuccessResponse(r.Context(), w, response, http.StatusOK)
 }
 
@@ -156,6 +157,7 @@ func addPassword(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
+	contextLogger.InfoContext(r.Context(), MessagePasswordCreated, LogKeyPasswordName, newPassword.Name)
 	writeSuccessResponse(r.Context(), w, response, http.StatusCreated)
 }
 
@@ -199,6 +201,7 @@ func deletePassword(w http.ResponseWriter, r *http.Request) {
 		Name: existingPassword.Name,
 	}
 
+	contextLogger.InfoContext(r.Context(), MessagePasswordDeleted, LogKeyPasswordName, existingPassword.Name)
 	writeSuccessResponse(r.Context(), w, response)
 }
 
@@ -280,5 +283,6 @@ func updatePassword(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
+	contextLogger.InfoContext(r.Context(), MessagePasswordUpdated, LogKeyPasswordName, existingPassword.Name)
 	writeSuccessResponse(r.Context(), w, response)
 }

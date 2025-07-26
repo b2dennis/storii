@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/handlers"
@@ -22,14 +23,13 @@ var config Config = Config{
 	DBPath:    "data.db",
 	JWTSecret: "b2dennis",
 	JWTExpiry: 24 * time.Hour,
+	LogOutput: os.Stdout,
 }
 
 func main() {
-	contextLogger.Info("Reading .env file")
-	godotenv.Load()
-
-	contextLogger.Info("Loading config")
 	loadConfig()
+	godotenv.Load()
+	initLogger()
 
 	contextLogger.Info("Initializing validator")
 	initValidator()
@@ -80,6 +80,7 @@ func loadConfig() {
 	dbPath := os.Getenv(VarDBPath)
 	jwtSecret := os.Getenv(VarJWTSecret)
 	jwtExpiry := os.Getenv(VarJWTExpiry)
+	logOutput := os.Getenv(VarLogOutput)
 
 	if address != "" {
 		config.Address = address
@@ -98,5 +99,14 @@ func loadConfig() {
 		if err == nil {
 			config.JWTExpiry = time.Hour * time.Duration(hours)
 		}
+	}
+
+	switch strings.ToLower(logOutput) {
+	case "stdout":
+		config.LogOutput = os.Stdout
+	case "stderr":
+		config.LogOutput = os.Stderr
+	default:
+		break
 	}
 }

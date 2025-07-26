@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"time"
 
@@ -18,6 +19,7 @@ type Config struct {
 	DBPath    string
 	JWTSecret string
 	JWTExpiry time.Duration
+	LogOutput io.Writer
 }
 
 // Request Handlers
@@ -169,4 +171,10 @@ func (h *ContextHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 
 func (h *ContextHandler) WithGroup(name string) slog.Handler {
 	return &ContextHandler{handler: h.handler.WithGroup(name)}
+}
+
+// Testing
+type GetPasswordTest struct {
+	SuccessResponse
+	Data GetPasswordsSuccess `json:"data"`
 }

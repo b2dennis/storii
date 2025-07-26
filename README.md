@@ -11,7 +11,6 @@ This API is mainly a data store. For security reasons, all passwords passed into
 The API features user accounts so that multiple people can use the same server instance. To secure these accounts, the server stores the hashes of the clients' master-passwords, so that it is only possible to access the stored passwords if you know the right login credentials. The master-passwords are hashed using the bcrypt algorithm.
 
 # TODO
-- Proper structured logging
-- Unit Tests -> normal tests (name_test.go)
+- Unit Tests
 - API Docs (OpenAPI)
 - Containerization
