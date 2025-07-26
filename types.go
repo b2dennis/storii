@@ -156,7 +156,7 @@ func (h *ContextHandler) Handle(ctx context.Context, record slog.Record) error {
 		record.AddAttrs(slog.String(ContextKeyMethod, method.(string)))
 	}
 	if userId := ctx.Value(ContextKeyUserID); userId != nil {
-		record.AddAttrs(slog.Uint64(ContextKeyUserID, userId.(uint64)))
+		record.AddAttrs(slog.Uint64(ContextKeyUserID, uint64(userId.(uint))))
 	}
 	if username := ctx.Value(ContextKeyUsername); username != nil {
 		record.AddAttrs(slog.String(ContextKeyUsername, username.(string)))

@@ -136,7 +136,7 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	r = r.WithContext(context.WithValue(r.Context(), ContextKeyUsername, user.Username))
-	r = r.WithContext(context.WithValue(r.Context(), ContextKeyUserID, uint64(user.ID)))
+	r = r.WithContext(context.WithValue(r.Context(), ContextKeyUserID, user.ID))
 
 	contextLogger.InfoContext(r.Context(), MessageUserCreated)
 	writeSuccessResponse(r.Context(), w, response)
