@@ -1,3 +1,4 @@
+# AI Generated
 openapi: 3.0.3
 info:
   title: Password Manager API
@@ -664,4 +665,3 @@ tags:
     description: User account registration, login, and management
   - name: Password Management  
     description: Encrypted password storage and retrieval
-```

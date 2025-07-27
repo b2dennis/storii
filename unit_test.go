@@ -1,3 +1,4 @@
+// AI Generated
 package main
 
 import (
