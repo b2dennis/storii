@@ -245,15 +245,31 @@ pwman-api/
 
 ### Testing
 ```bash
-# Run tests
+# Run all tests
 go test ./...
 
-# Run with coverage
+# Run tests with coverage
 go test -cover ./...
 
-# Run specific test
+# Run tests with verbose output
+go test -v ./...
+
+# Run specific test function
 go test -run TestFunctionName
+
+# Run benchmarks
+go test -bench=.
 ```
+
+#### Test Coverage Includes
+- Authentication (JWT generation, validation, middleware)
+- Password hashing and validation
+- Input validation and sanitization
+- All HTTP handlers (user and password management)
+- Database operations and user isolation
+- Error handling and edge cases
+- Complete integration flow testing
+- Performance benchmarks
 
 ## 🔒 Security Considerations
 
