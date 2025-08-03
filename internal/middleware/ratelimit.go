@@ -14,6 +14,13 @@ type RateLimit struct {
 	responseWriter *utils.ResponseWriter
 }
 
+func NewRateLimit(logger *slog.Logger, responseWriter *utils.ResponseWriter) *RateLimit {
+	return &RateLimit{
+		logger:         logger,
+		responseWriter: responseWriter,
+	}
+}
+
 var limitMap map[string]*rate.Limiter = make(map[string]*rate.Limiter)
 
 func (rl *RateLimit) RateLimitMiddleware(next http.Handler) http.Handler {

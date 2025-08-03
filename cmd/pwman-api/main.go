@@ -27,53 +27,7 @@ var config Config = Config{
 }
 
 func main() {
-	loadConfig()
-	godotenv.Load()
-	initLogger()
 
-	contextLogger.Info("Initializing validator")
-	initValidator()
-
-	contextLogger.Info("Initializing JWT secret")
-
-	contextLogger.Info("Initializing DB connection")
-	var err error
-	db, err = gorm.Open(sqlite.Open(config.DBPath), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	if err != nil {
-		panic(fmt.Sprintf("failed to connect to database: %s", config.DBPath))
-	}
-
-	contextLogger.Info("Running DB migrations")
-	runDbMigrations()
-
-	contextLogger.Info("Initializing router")
-	r := mux.NewRouter()
-
-	registerHandlers(r)
-
-	contextLogger.Info(fmt.Sprintf("Starting HTTP server at %s\n", config.Address))
-
-	r.Use(contextMiddleware, loggingMiddleware, rateLimitMiddleware)
-
-	http.ListenAndServe(config.Address, handlers.CORS(
-		handlers.AllowCredentials(),
-		handlers.AllowedHeaders([]string{"GET", "POST", "PUT", "DELETE"}),
-		handlers.AllowedHeaders([]string{"Authorization"}),
-		handlers.AllowedOrigins([]string{"*"}),
-	)(r))
-}
-
-func registerHandlers(r *mux.Router) {
-	registerPasswordHandlers(r)
-	registerUserHandlers(r)
-}
-
-func runDbMigrations() {
-	db.AutoMigrate(&StoredPassword{})
-	db.AutoMigrate(&User{})
-}
 
 func loadConfig() {
 	address := os.Getenv(VarAddress)

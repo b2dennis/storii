@@ -16,6 +16,13 @@ type JWT struct {
 	responseWriter *utils.ResponseWriter
 }
 
+func NewJWT(jwtService *auth.JWTService, responseWriter *utils.ResponseWriter) *JWT {
+	return &JWT{
+		jwtService:     jwtService,
+		responseWriter: responseWriter,
+	}
+}
+
 func extractJWTFromHeader(r *http.Request) (string, error) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {

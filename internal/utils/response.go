@@ -14,6 +14,12 @@ type ResponseWriter struct {
 	logger *slog.Logger
 }
 
+func NewResponseWriter(logger *slog.Logger) *ResponseWriter {
+	return &ResponseWriter{
+		logger: logger,
+	}
+}
+
 func (r *ResponseWriter) WriteErrorResponse(ctx context.Context, w http.ResponseWriter, statusCode int, errorCode string, messageOpt ...string) {
 	w.Header().Set("Content-Type", constants.ContentTypeJSON)
 	w.WriteHeader(statusCode)

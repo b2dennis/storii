@@ -25,16 +25,6 @@ type UserHandlerManager struct {
 	validator      *validation.Validator
 }
 
-func NewUserHandlerManager(jwt *middleware.JWT, jwtService *auth.JWTService, logger *slog.Logger, responseWriter *utils.ResponseWriter, validator *validation.Validator) *UserHandlerManager {
-	return &UserHandlerManager{
-		jwt:            jwt,
-		logger:         logger,
-		responseWriter: responseWriter,
-		validator:      validator,
-		jwtService:     jwtService,
-	}
-}
-
 func (uhm *UserHandlerManager) RegisterUserHandlers(r *mux.Router) {
 	var userHandlers []models.RequestHandlerStruct = []models.RequestHandlerStruct{
 		{
