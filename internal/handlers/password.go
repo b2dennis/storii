@@ -3,6 +3,7 @@ package handlers
 import (
 	"b2dennis/pwman-api/internal/constants"
 	"b2dennis/pwman-api/internal/middleware"
+	"b2dennis/pwman-api/internal/models"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -12,7 +13,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
-var passwordHandlers []RequestHandlerStruct = []RequestHandlerStruct{
+var passwordHandlers []models.RequestHandlerStruct = []RequestHandlerStruct{
 	{
 		Handler: middleware.jwtMiddleware(getPasswords),
 		Method:  http.MethodGet,
