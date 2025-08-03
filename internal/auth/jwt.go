@@ -1,20 +1,25 @@
 package auth
 
 import (
+	"b2dennis/pwman-api/internal/config"
+	"b2dennis/pwman-api/internal/constants"
+	"b2dennis/pwman-api/internal/models"
 	"errors"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-type Claims struct {
-	UserID   uint   `json:"user_id"`
-	Username string `json:"username"`
-	jwt.RegisteredClaims
+type JWTService struct {
+	config *config.Config
 }
 
-func generateJWT(user User) (string, error) {
-	expirationTime := time.Now().Add(config.JWTExpiry)
+func NewJWTService(cfg *config.Config) *JWTService {
+	return &JWTService{config: cfg}
+}
+
+func (j *JWTService) GenerateJWT(user models.User) (string, error) {
+	expirationTime := time.Now().Add(j.config.JWTExpiry)
 	claims := &Claims{
 		UserID:   user.ID,
 		Username: user.Username,
@@ -25,13 +30,13 @@ func generateJWT(user User) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(config.JWTSecret))
+	return token.SignedString([]byte(j.config.JWTSecret))
 }
 
-func validateJWT(tokenString string) (*Claims, error) {
+func (j *JWTService) ValidateJWT(tokenString string) (*Claims, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
-		return []byte(config.JWTSecret), nil
+		return []byte(j.config.JWTSecret), nil
 	})
 
 	if err != nil {
@@ -39,8 +44,14 @@ func validateJWT(tokenString string) (*Claims, error) {
 	}
 
 	if !token.Valid {
-		return nil, errors.New(ErrorInvalidToken)
+		return nil, errors.New(constants.ErrorInvalidToken)
 	}
 
 	return claims, nil
+}
+
+type Claims struct {
+	UserID   uint   `json:"user_id"`
+	Username string `json:"username"`
+	jwt.RegisteredClaims
 }

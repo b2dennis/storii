@@ -4,8 +4,10 @@ import (
 	"b2dennis/pwman-api/internal/constants"
 	"b2dennis/pwman-api/internal/middleware"
 	"b2dennis/pwman-api/internal/models"
+	"b2dennis/pwman-api/internal/utils"
 	"encoding/hex"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,53 +15,58 @@ import (
 	"github.com/gorilla/mux"
 )
 
-var passwordHandlers []models.RequestHandlerStruct = []RequestHandlerStruct{
-	{
-		Handler: middleware.jwtMiddleware(getPasswords),
-		Method:  http.MethodGet,
-		Route:   constants.PasswordRouteFetch,
-	},
-	{
-		Handler: middleware.jwtMiddleware(addPassword),
-		Method:  http.MethodPost,
-		Route:   constants.PasswordRouteAdd,
-	},
-	{
-		Handler: middleware.jwtMiddleware(deletePassword),
-		Method:  http.MethodDelete,
-		Route:   constants.PasswordRouteDelete,
-	},
-	{
-		Handler: middleware.jwtMiddleware(updatePassword),
-		Method:  http.MethodPut,
-		Route:   constants.PasswordRouteUpdate,
-	},
+type PasswordHandlerManager struct {
+	jwt            *middleware.JWT
+	logger         *slog.Logger
+	responseWriter *utils.ResponseWriter
 }
 
-func registerPasswordHandlers(r *mux.Router) {
+func (phm *PasswordHandlerManager) registerPasswordHandlers(r *mux.Router) {
+	var passwordHandlers []models.RequestHandlerStruct = []models.RequestHandlerStruct{
+		{
+			Handler: phm.jwt.JwtMiddleware(phm.getPasswords),
+			Method:  http.MethodGet,
+			Route:   constants.PasswordRouteFetch,
+		},
+		{
+			Handler: phm.jwt.JwtMiddleware(addPassword),
+			Method:  http.MethodPost,
+			Route:   constants.PasswordRouteAdd,
+		},
+		{
+			Handler: phm.jwt.JwtMiddleware(deletePassword),
+			Method:  http.MethodDelete,
+			Route:   constants.PasswordRouteDelete,
+		},
+		{
+			Handler: phm.jwt.JwtMiddleware(updatePassword),
+			Method:  http.MethodPut,
+			Route:   constants.PasswordRouteUpdate,
+		},
+	}
 	subRouter := r.PathPrefix(constants.RoutePassword).Subrouter()
 	for _, handler := range passwordHandlers {
-		contextLogger.Info(constants.MessageRouteRegistered, constants.LogKeyRoute, constants.RoutePassword, constants.LogKeySubroute, handler.Route, constants.LogKeyMethod, handler.Method)
+		phm.logger.Info(constants.MessageRouteRegistered, constants.LogKeyRoute, constants.RoutePassword, constants.LogKeySubroute, handler.Route, constants.LogKeyMethod, handler.Method)
 		subRouter.HandleFunc(handler.Route, handler.Handler).Methods(handler.Method)
 		subRouter.HandleFunc(handler.Route+"/", handler.Handler).Methods(handler.Method)
 	}
 }
 
-func getPasswords(w http.ResponseWriter, r *http.Request) {
+func (phm *PasswordHandlerManager) getPasswords(w http.ResponseWriter, r *http.Request) {
 	userIDStr := r.Header.Get(constants.AuthHeaderUserID)
 	UserID, err := strconv.ParseUint(userIDStr, 10, 64)
 	if err != nil {
-		writeErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidID, "Invalid user ID in token")
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidID, "Invalid user ID in token")
 		return
 	}
 
-	var storedPasswords []StoredPassword
+	var storedPasswords []models.StoredPassword
 	db.Where("user_id = ?", uint(UserID)).Find(&storedPasswords)
 
-	responsePasswords := make([]ResponsePassword, len(storedPasswords))
+	responsePasswords := make([]models.ResponsePassword, len(storedPasswords))
 
 	for i, storedPassword := range storedPasswords {
-		responsePasswords[i] = ResponsePassword{
+		responsePasswords[i] = models.ResponsePassword{
 			Name:          storedPassword.Name,
 			Value:         hex.EncodeToString(storedPassword.Value),
 			IV:            hex.EncodeToString(storedPassword.IV),
@@ -69,28 +76,28 @@ func getPasswords(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	response := GetPasswordsSuccess{
+	response := models.GetPasswordsSuccess{
 		Passwords: responsePasswords,
 	}
 
-	contextLogger.InfoContext(r.Context(), constants.MessagePasswordsFetched)
-	writeSuccessResponse(r.Context(), w, response, http.StatusOK)
+	phm.logger.InfoContext(r.Context(), constants.MessagePasswordsFetched)
+	phm.responseWriter.WriteSuccessResponse(r.Context(), w, response, http.StatusOK)
 }
 
-func addPassword(w http.ResponseWriter, r *http.Request) {
+func (phm *PasswordHandlerManager) addPassword(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	userIDStr := r.Header.Get(constants.AuthHeaderUserID)
 	UserID, err := strconv.ParseUint(userIDStr, 10, 64)
 	if err != nil {
-		writeErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidID, "Invalid user ID in token")
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidID, "Invalid user ID in token")
 		return
 	}
 
-	var addPasswordRequest AddPasswordRequest
+	var addPasswordRequest models.AddPasswordRequest
 	err = json.NewDecoder(r.Body).Decode(&addPasswordRequest)
 	if err != nil {
-		writeErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidJson)
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidJson)
 		return
 	}
 

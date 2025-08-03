@@ -94,7 +94,7 @@ func validatePasswordName(fl validator.FieldLevel) bool {
 	return true
 }
 
-func validateStruct(s any) []string {
+func ValidateStruct(s any) []string {
 	var errors []string
 
 	err := validate.Struct(s)

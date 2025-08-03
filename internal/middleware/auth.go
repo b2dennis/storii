@@ -3,12 +3,17 @@ package middleware
 import (
 	"b2dennis/pwman-api/internal/auth"
 	"b2dennis/pwman-api/internal/constants"
+	"b2dennis/pwman-api/internal/utils"
 	"context"
 	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 )
+
+type JWT struct {
+	jwtService *auth.JWTService
+}
 
 func extractJWTFromHeader(r *http.Request) (string, error) {
 	authHeader := r.Header.Get("Authorization")
@@ -24,17 +29,17 @@ func extractJWTFromHeader(r *http.Request) (string, error) {
 	return parts[1], nil
 }
 
-func jwtMiddleware(next http.HandlerFunc) http.HandlerFunc {
+func (j *JWT) JwtMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tokenString, err := extractJWTFromHeader(r)
 		if err != nil {
-			writeErrorResponse(r.Context(), w, http.StatusUnauthorized, "Unauthorized: "+err.Error())
+			utils.WriteErrorResponse(r.Context(), w, http.StatusUnauthorized, "Unauthorized: "+err.Error())
 			return
 		}
 
-		claims, err := auth.validateJWT(tokenString)
+		claims, err := j.jwtService.ValidateJWT(tokenString)
 		if err != nil {
-			writeErrorResponse(r.Context(), w, http.StatusUnauthorized, "Unauthorized: "+err.Error())
+			utils.WriteErrorResponse(r.Context(), w, http.StatusUnauthorized, "Unauthorized: "+err.Error())
 			return
 		}
 

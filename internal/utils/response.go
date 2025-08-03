@@ -5,11 +5,16 @@ import (
 	"b2dennis/pwman-api/internal/models"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 )
 
-func writeErrorResponse(ctx context.Context, w http.ResponseWriter, statusCode int, errorCode string, messageOpt ...string) {
+type ResponseWriter struct {
+	logger *slog.Logger
+}
+
+func (r *ResponseWriter) WriteErrorResponse(ctx context.Context, w http.ResponseWriter, statusCode int, errorCode string, messageOpt ...string) {
 	w.Header().Set("Content-Type", constants.ContentTypeJSON)
 	w.WriteHeader(statusCode)
 	message := ""
@@ -17,7 +22,7 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, statusCode i
 		message = messageOpt[0]
 	}
 
-	contextLogger.ErrorContext(ctx, message, "statusCode", strconv.Itoa(statusCode), "errorCode", errorCode)
+	r.logger.ErrorContext(ctx, message, "statusCode", strconv.Itoa(statusCode), "errorCode", errorCode)
 
 	json.NewEncoder(w).Encode(models.ErrorResponse{
 		Error:   errorCode,
@@ -25,7 +30,7 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, statusCode i
 	})
 }
 
-func writeSuccessResponse(ctx context.Context, w http.ResponseWriter, data any, statusCodeOpt ...int) {
+func (r *ResponseWriter) WriteSuccessResponse(ctx context.Context, w http.ResponseWriter, data any, statusCodeOpt ...int) {
 	w.Header().Set("Content-Type", constants.ContentTypeJSON)
 	statusCode := http.StatusOK
 	if len(statusCodeOpt) > 0 {
@@ -33,7 +38,7 @@ func writeSuccessResponse(ctx context.Context, w http.ResponseWriter, data any, 
 	}
 	w.WriteHeader(statusCode)
 
-	contextLogger.InfoContext(ctx, constants.ResponseSuccess, "statusCode", strconv.Itoa(statusCode))
+	r.logger.InfoContext(ctx, constants.ResponseSuccess, "statusCode", strconv.Itoa(statusCode))
 
 	json.NewEncoder(w).Encode(models.SuccessResponse{
 		Data:    data,
