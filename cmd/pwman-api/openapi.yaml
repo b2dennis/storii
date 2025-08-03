@@ -1,0 +1,667 @@
+# AI Generated
+openapi: 3.0.3
+info:
+  title: Password Manager API
+  description: |
+    A self-hostable password manager API written in Go. This API provides secure storage and management of encrypted passwords with user authentication via JWT tokens.
+    
+    ## Security Model
+    - All stored passwords are client-side encrypted using AES-GCM with Argon2 key derivation
+    - User authentication via JWT tokens with bcrypt password hashing
+    - Each user can only access their own passwords
+    
+    ## Encryption Details
+    The API expects passwords to be already encrypted client-side and stores:
+    - Encrypted password value (256 bytes, hex-encoded)
+    - Initialization Vector (12 bytes, hex-encoded) 
+    - Authentication Tag (16 bytes, hex-encoded)
+    - Argon2 salt (16 bytes, hex-encoded)
+  version: 1.0.0
+  contact:
+    name: Dennis
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:9999
+    description: Development server
+  - url: https://api.example.com
+    description: Production server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /user/register:
+    post:
+      tags:
+        - User Management
+      summary: Register a new user account
+      description: Creates a new user account with the provided username and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+            example:
+              username: "johndoe"
+              password: "SecurePassword123!"
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CreateUserSuccess'
+              example:
+                message: "ok"
+                data:
+                  id: 1
+                  username: "johndoe"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Username already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "user_already_exists"
+                message: "Username already exists"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /user/login:
+    post:
+      tags:
+        - User Management
+      summary: Login to user account
+      description: Authenticates a user and returns a JWT token for API access
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              username: "johndoe"
+              password: "SecurePassword123!"
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/LoginSuccess'
+              example:
+                message: "ok"
+                data:
+                  token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  user_id: 1
+                  username: "johndoe"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "invalid_credentials"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /user/update:
+    put:
+      tags:
+        - User Management
+      summary: Update user account
+      description: Updates the username and/or password for the authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+            example:
+              username: "johnsmith"
+              password: "NewSecurePassword123!"
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UpdateUserSuccess'
+              example:
+                message: "ok"
+                data:
+                  id: 1
+                  username: "johnsmith"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /user/delete:
+    delete:
+      tags:
+        - User Management
+      summary: Delete user account
+      description: Permanently deletes the authenticated user's account and all associated passwords
+      responses:
+        '200':
+          description: User deleted successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/DeleteUserSuccess'
+              example:
+                message: "ok"
+                data:
+                  user_id: 1
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /password:
+    get:
+      tags:
+        - Password Management
+      summary: Get all passwords
+      description: Retrieves all encrypted passwords for the authenticated user
+      responses:
+        '200':
+          description: Passwords retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/GetPasswordsSuccess'
+              example:
+                message: "ok"
+                data:
+                  passwords:
+                    - name: "gmail"
+                      value: "a1b2c3d4e5f6..."
+                      iv: "123456789abc"
+                      auth_tag: "def456789012"
+                      salt: "abc123def456"
+                      associated_url: "https://gmail.com"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /password/create:
+    post:
+      tags:
+        - Password Management
+      summary: Add a new password
+      description: Stores a new encrypted password for the authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddPasswordRequest'
+            example:
+              name: "github"
+              value: "a1b2c3d4e5f6789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
+              iv: "123456789abcdef012345678"
+              auth_tag: "def456789012345678901234567890ab"
+              salt: "abc123def456789012345678901234ab"
+              associated_url: "https://github.com"
+      responses:
+        '201':
+          description: Password created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AddPasswordSuccess'
+              example:
+                message: "ok"
+                data:
+                  new_password:
+                    name: "github"
+                    value: "a1b2c3d4e5f6..."
+                    iv: "123456789abc"
+                    auth_tag: "def456789012"
+                    salt: "abc123def456"
+                    associated_url: "https://github.com"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /password/update:
+    put:
+      tags:
+        - Password Management  
+      summary: Update an existing password
+      description: Updates an existing encrypted password for the authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePasswordRequest'
+            example:
+              name: "github"
+              new_name: "github-personal"
+              value: "a1b2c3d4e5f6789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
+              iv: "987654321fedcba098765432"
+              auth_tag: "123abc456def789012345678901234cd"
+              salt: "fed321cba987654321098765432109ef"
+              associated_url: "https://github.com/personal"
+      responses:
+        '200':
+          description: Password updated successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UpdatePasswordSuccess'
+              example:
+                message: "ok"
+                data:
+                  new_password:
+                    name: "github-personal"
+                    value: "a1b2c3d4e5f6..."
+                    iv: "987654321fed"
+                    auth_tag: "123abc456def"
+                    salt: "fed321cba987"
+                    associated_url: "https://github.com/personal"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /password/delete:
+    delete:
+      tags:
+        - Password Management
+      summary: Delete a password
+      description: Permanently deletes a password for the authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeletePasswordRequest'
+            example:
+              name: "github"
+      responses:
+        '200':
+          description: Password deleted successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/DeletePasswordSuccess'
+              example:
+                message: "ok"
+                data:
+                  name: "github"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from the login endpoint
+
+  schemas:
+    # Request schemas
+    CreateUserRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 4
+          maxLength: 32
+          pattern: '^[a-zA-Z][a-zA-Z0-9_-]*$'
+          description: Username starting with a letter, containing only letters, numbers, underscores, and dashes
+          example: "johndoe"
+        password:
+          type: string
+          minLength: 12
+          maxLength: 72
+          description: Password must contain at least 3 of the following - uppercase letters, lowercase letters, numbers, special characters
+          example: "SecurePassword123!"
+
+    LoginRequest:
+      $ref: '#/components/schemas/CreateUserRequest'
+
+    UpdateUserRequest:
+      $ref: '#/components/schemas/CreateUserRequest'
+
+    AddPasswordRequest:
+      type: object
+      required:
+        - name
+        - value
+        - iv
+        - auth_tag
+        - salt
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Unique name for the password entry
+          example: "gmail"
+        value:
+          type: string
+          pattern: '^[0-9a-fA-F]{512}$'
+          description: Hex-encoded encrypted password value (256 bytes)
+          example: "a1b2c3d4e5f6789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
+        iv:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          description: Hex-encoded initialization vector (12 bytes)
+          example: "123456789abcdef012345678"
+        auth_tag:
+          type: string
+          pattern: '^[0-9a-fA-F]{32}$'
+          description: Hex-encoded authentication tag (16 bytes)
+          example: "def456789012345678901234567890ab"
+        salt:
+          type: string
+          pattern: '^[0-9a-fA-F]{32}$'
+          description: Hex-encoded Argon2 salt (16 bytes)
+          example: "abc123def456789012345678901234ab"
+        associated_url:
+          type: string
+          maxLength: 2048
+          format: uri
+          description: Optional URL associated with this password
+          example: "https://gmail.com"
+
+    UpdatePasswordRequest:
+      allOf:
+        - $ref: '#/components/schemas/AddPasswordRequest'
+        - type: object
+          required:
+            - new_name
+          properties:
+            new_name:
+              type: string
+              minLength: 1
+              maxLength: 100
+              description: New name for the password entry
+              example: "gmail-personal"
+
+    DeletePasswordRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Name of the password to delete
+          example: "gmail"
+
+    # Response schemas
+    SuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "ok"
+        data:
+          type: object
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error code identifying the type of error
+          enum:
+            - invalid_id
+            - invalid_credentials  
+            - user_or_pass_missing
+            - invalid_json
+            - invalid_input
+            - creation_failed
+            - duplicate_password_name
+            - user_already_exists
+            - validation_error
+            - internal_server_error
+            - unauthorized
+            - forbidden
+            - not_found
+            - rate_limit
+            - invalid_token
+            - auth_header_missing
+            - auth_header_invalid
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Username already exists"
+
+    CreateUserSuccess:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unique user ID
+          example: 1
+        username:
+          type: string
+          description: Created username
+          example: "johndoe"
+
+    LoginSuccess:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT token for authentication
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        user_id:
+          type: integer
+          format: int64
+          description: User ID
+          example: 1
+        username:
+          type: string
+          description: Username
+          example: "johndoe"
+
+    UpdateUserSuccess:
+      $ref: '#/components/schemas/CreateUserSuccess'
+
+    DeleteUserSuccess:
+      type: object
+      properties:
+        user_id:
+          type: integer
+          format: int64
+          description: ID of the deleted user
+          example: 1
+
+    ResponsePassword:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Password entry name
+          example: "gmail"
+        value:
+          type: string
+          description: Hex-encoded encrypted password value
+          example: "a1b2c3d4e5f6..."
+        iv:
+          type: string
+          description: Hex-encoded initialization vector
+          example: "123456789abc"
+        auth_tag:
+          type: string
+          description: Hex-encoded authentication tag
+          example: "def456789012"
+        salt:
+          type: string
+          description: Hex-encoded Argon2 salt
+          example: "abc123def456"
+        associated_url:
+          type: string
+          description: Associated URL (if provided)
+          example: "https://gmail.com"
+
+    GetPasswordsSuccess:
+      type: object
+      properties:
+        passwords:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResponsePassword'
+          description: Array of encrypted passwords
+
+    AddPasswordSuccess:
+      type: object
+      properties:
+        new_password:
+          $ref: '#/components/schemas/ResponsePassword'
+
+    UpdatePasswordSuccess:
+      $ref: '#/components/schemas/AddPasswordSuccess'
+
+    DeletePasswordSuccess:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Name of the deleted password
+          example: "gmail"
+
+  responses:
+    BadRequest:
+      description: Bad request - validation error or malformed JSON
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            ValidationError:
+              summary: Validation error
+              value:
+                error: "validation_error"
+                message: "username must be at least 4 characters long"
+            InvalidJSON:
+              summary: Invalid JSON
+              value:
+                error: "invalid_json"
+
+    Unauthorized:
+      description: Unauthorized - invalid or missing JWT token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            MissingToken:
+              summary: Missing authorization header
+              value:
+                error: "auth_header_missing"
+            InvalidToken:
+              summary: Invalid JWT token
+              value:
+                error: "invalid_token"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "not_found"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "internal_server_error"
+            message: "Failed to hash password"
+
+tags:
+  - name: User Management
+    description: User account registration, login, and management
+  - name: Password Management  
+    description: Encrypted password storage and retrieval
