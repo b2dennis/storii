@@ -5,6 +5,7 @@ import (
 	"b2dennis/pwman-api/internal/middleware"
 	"b2dennis/pwman-api/internal/models"
 	"b2dennis/pwman-api/internal/utils"
+	"b2dennis/pwman-api/internal/validation"
 	"encoding/hex"
 	"encoding/json"
 	"log/slog"
@@ -19,6 +20,7 @@ type PasswordHandlerManager struct {
 	jwt            *middleware.JWT
 	logger         *slog.Logger
 	responseWriter *utils.ResponseWriter
+	validator      *validation.Validator
 }
 
 func (phm *PasswordHandlerManager) registerPasswordHandlers(r *mux.Router) {
@@ -29,17 +31,17 @@ func (phm *PasswordHandlerManager) registerPasswordHandlers(r *mux.Router) {
 			Route:   constants.PasswordRouteFetch,
 		},
 		{
-			Handler: phm.jwt.JwtMiddleware(addPassword),
+			Handler: phm.jwt.JwtMiddleware(phm.addPassword),
 			Method:  http.MethodPost,
 			Route:   constants.PasswordRouteAdd,
 		},
 		{
-			Handler: phm.jwt.JwtMiddleware(deletePassword),
+			Handler: phm.jwt.JwtMiddleware(phm.deletePassword),
 			Method:  http.MethodDelete,
 			Route:   constants.PasswordRouteDelete,
 		},
 		{
-			Handler: phm.jwt.JwtMiddleware(updatePassword),
+			Handler: phm.jwt.JwtMiddleware(phm.updatePassword),
 			Method:  http.MethodPut,
 			Route:   constants.PasswordRouteUpdate,
 		},
@@ -101,44 +103,44 @@ func (phm *PasswordHandlerManager) addPassword(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	validationErrors := validateStruct(addPasswordRequest)
+	validationErrors := phm.validator.ValidateStruct(addPasswordRequest)
 	if len(validationErrors) > 0 {
-		writeErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorValidation, strings.Join(validationErrors, "; "))
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorValidation, strings.Join(validationErrors, "; "))
 		return
 	}
 
-	var existing StoredPassword
+	var existing models.StoredPassword
 	result := db.Where("user_id = ? AND name = ?", UserID, addPasswordRequest.Name).First(&existing)
 	if result.RowsAffected > 0 {
-		writeErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorDuplicatePassword)
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorDuplicatePassword)
 		return
 	}
 
 	value, err := hex.DecodeString(addPasswordRequest.Value)
 	if err != nil {
-		writeErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform password value to byte array")
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform password value to byte array")
 		return
 	}
 
 	iv, err := hex.DecodeString(addPasswordRequest.IV)
 	if err != nil {
-		writeErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform password IV to byte array")
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform password IV to byte array")
 		return
 	}
 
 	authTag, err := hex.DecodeString(addPasswordRequest.AuthTag)
 	if err != nil {
-		writeErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform password auth tag to byte array")
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform password auth tag to byte array")
 		return
 	}
 
 	salt, err := hex.DecodeString(addPasswordRequest.Salt)
 	if err != nil {
-		writeErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform keygen salt to byte array")
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform keygen salt to byte array")
 		return
 	}
 
-	newPassword := &StoredPassword{
+	newPassword := &models.StoredPassword{
 		UserID:        uint(UserID),
 		Name:          addPasswordRequest.Name,
 		Value:         value,
@@ -150,12 +152,12 @@ func (phm *PasswordHandlerManager) addPassword(w http.ResponseWriter, r *http.Re
 
 	result = db.Create(newPassword)
 	if result.RowsAffected == 0 {
-		writeErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorCreationFailed, "Could not create password")
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorCreationFailed, "Could not create password")
 		return
 	}
 
-	response := AddPasswordSuccess{
-		NewPassword: ResponsePassword{
+	response := models.AddPasswordSuccess{
+		NewPassword: models.ResponsePassword{
 			Name:          newPassword.Name,
 			Value:         hex.EncodeToString(newPassword.Value),
 			IV:            hex.EncodeToString(newPassword.IV),
@@ -165,105 +167,105 @@ func (phm *PasswordHandlerManager) addPassword(w http.ResponseWriter, r *http.Re
 		},
 	}
 
-	contextLogger.InfoContext(r.Context(), constants.MessagePasswordCreated, constants.LogKeyPasswordName, newPassword.Name)
-	writeSuccessResponse(r.Context(), w, response, http.StatusCreated)
+	phm.logger.InfoContext(r.Context(), constants.MessagePasswordCreated, constants.LogKeyPasswordName, newPassword.Name)
+	phm.responseWriter.WriteSuccessResponse(r.Context(), w, response, http.StatusCreated)
 }
 
-func deletePassword(w http.ResponseWriter, r *http.Request) {
+func (phm *PasswordHandlerManager) deletePassword(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	userIDStr := r.Header.Get(constants.AuthHeaderUserID)
 	UserID, err := strconv.ParseUint(userIDStr, 10, 64)
 	if err != nil {
-		writeErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidID, "Invalid user ID in token")
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidID, "Invalid user ID in token")
 		return
 	}
 
-	var deletePasswordRequest DeletePasswordRequest
+	var deletePasswordRequest models.DeletePasswordRequest
 	err = json.NewDecoder(r.Body).Decode(&deletePasswordRequest)
 	if err != nil {
-		writeErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidJson)
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidJson)
 		return
 	}
 
-	validationErrors := validateStruct(deletePasswordRequest)
+	validationErrors := phm.validator.ValidateStruct(deletePasswordRequest)
 	if len(validationErrors) > 0 {
-		writeErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorValidation, strings.Join(validationErrors, "; "))
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorValidation, strings.Join(validationErrors, "; "))
 		return
 	}
 
-	var existingPassword StoredPassword
+	var existingPassword models.StoredPassword
 	result := db.Where("user_id = ? AND name = ?", UserID, deletePasswordRequest.Name).First(&existingPassword)
 	if result.RowsAffected == 0 {
-		writeErrorResponse(r.Context(), w, http.StatusNotFound, constants.ErrorNotFound)
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusNotFound, constants.ErrorNotFound)
 		return
 	}
 
 	result = db.Delete(&existingPassword)
 	if result.RowsAffected == 0 {
-		writeErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Failed to delete password")
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Failed to delete password")
 		return
 	}
 
-	response := DeletePasswordSuccess{
+	response := models.DeletePasswordSuccess{
 		Name: existingPassword.Name,
 	}
 
-	contextLogger.InfoContext(r.Context(), constants.MessagePasswordDeleted, constants.LogKeyPasswordName, existingPassword.Name)
-	writeSuccessResponse(r.Context(), w, response)
+	phm.logger.InfoContext(r.Context(), constants.MessagePasswordDeleted, constants.LogKeyPasswordName, existingPassword.Name)
+	phm.responseWriter.WriteSuccessResponse(r.Context(), w, response)
 }
 
-func updatePassword(w http.ResponseWriter, r *http.Request) {
+func (phm *PasswordHandlerManager) updatePassword(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	UserIDStr := r.Header.Get(constants.AuthHeaderUserID)
 	UserID, err := strconv.ParseUint(UserIDStr, 10, 64)
 	if err != nil {
-		writeErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidID, "Invalid user ID in token")
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidID, "Invalid user ID in token")
 		return
 	}
 
-	var updatePasswordRequest UpdatePasswordRequest
+	var updatePasswordRequest models.UpdatePasswordRequest
 	err = json.NewDecoder(r.Body).Decode(&updatePasswordRequest)
 	if err != nil {
-		writeErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidJson)
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidJson)
 		return
 	}
 
-	validationErrors := validateStruct(updatePasswordRequest)
+	validationErrors := phm.validator.ValidateStruct(updatePasswordRequest)
 	if len(validationErrors) > 0 {
-		writeErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorValidation, strings.Join(validationErrors, "; "))
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorValidation, strings.Join(validationErrors, "; "))
 		return
 	}
 
-	var existingPassword StoredPassword
+	var existingPassword models.StoredPassword
 	result := db.Where("user_id = ? AND name = ?", UserID, updatePasswordRequest.Name).First(&existingPassword)
 	if result.RowsAffected == 0 {
-		writeErrorResponse(r.Context(), w, http.StatusNotFound, constants.ErrorNotFound)
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusNotFound, constants.ErrorNotFound)
 		return
 	}
 
 	value, err := hex.DecodeString(updatePasswordRequest.Value)
 	if err != nil {
-		writeErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform password value to byte array")
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform password value to byte array")
 		return
 	}
 
 	iv, err := hex.DecodeString(updatePasswordRequest.IV)
 	if err != nil {
-		writeErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform password IV to byte array")
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform password IV to byte array")
 		return
 	}
 
 	authTag, err := hex.DecodeString(updatePasswordRequest.AuthTag)
 	if err != nil {
-		writeErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform password auth tag to byte array")
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform password auth tag to byte array")
 		return
 	}
 
 	salt, err := hex.DecodeString(updatePasswordRequest.Salt)
 	if err != nil {
-		writeErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform keygen salt to byte array")
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform keygen salt to byte array")
 		return
 	}
 
@@ -276,12 +278,12 @@ func updatePassword(w http.ResponseWriter, r *http.Request) {
 
 	result = db.Save(existingPassword)
 	if result.RowsAffected == 0 {
-		writeErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorCreationFailed, "Could not create password")
+		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorCreationFailed, "Could not create password")
 		return
 	}
 
-	response := UpdatePasswordSuccess{
-		NewPassword: ResponsePassword{
+	response := models.UpdatePasswordSuccess{
+		NewPassword: models.ResponsePassword{
 			Name:          existingPassword.Name,
 			Value:         hex.EncodeToString(existingPassword.Value),
 			IV:            hex.EncodeToString(existingPassword.IV),
@@ -291,6 +293,6 @@ func updatePassword(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	contextLogger.InfoContext(r.Context(), constants.MessagePasswordUpdated, constants.LogKeyPasswordName, existingPassword.Name)
-	writeSuccessResponse(r.Context(), w, response)
+	phm.logger.InfoContext(r.Context(), constants.MessagePasswordUpdated, constants.LogKeyPasswordName, existingPassword.Name)
+	phm.responseWriter.WriteSuccessResponse(r.Context(), w, response)
 }

@@ -7,11 +7,11 @@ import (
 )
 
 type ContextHandler struct {
-	handler slog.Handler
+	Handler slog.Handler
 }
 
 func (h *ContextHandler) Enabled(ctx context.Context, level slog.Level) bool {
-	return h.handler.Enabled(ctx, level)
+	return h.Handler.Enabled(ctx, level)
 }
 
 func (h *ContextHandler) Handle(ctx context.Context, record slog.Record) error {
@@ -34,13 +34,13 @@ func (h *ContextHandler) Handle(ctx context.Context, record slog.Record) error {
 		record.AddAttrs(slog.String(constants.ContextKeyUsername, username.(string)))
 	}
 
-	return h.handler.Handle(ctx, record)
+	return h.Handler.Handle(ctx, record)
 }
 
 func (h *ContextHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &ContextHandler{handler: h.handler.WithAttrs(attrs)}
+	return &ContextHandler{Handler: h.Handler.WithAttrs(attrs)}
 }
 
 func (h *ContextHandler) WithGroup(name string) slog.Handler {
-	return &ContextHandler{handler: h.handler.WithGroup(name)}
+	return &ContextHandler{Handler: h.Handler.WithGroup(name)}
 }

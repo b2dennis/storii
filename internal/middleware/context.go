@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func contextMiddleware(next http.Handler) http.Handler {
+func ContextMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestId := uuid.New()
 

@@ -2,14 +2,21 @@ package middleware
 
 import (
 	"b2dennis/pwman-api/internal/constants"
+	"b2dennis/pwman-api/internal/utils"
+	"log/slog"
 	"net/http"
 
 	"golang.org/x/time/rate"
 )
 
+type RateLimit struct {
+	logger         *slog.Logger
+	responseWriter *utils.ResponseWriter
+}
+
 var limitMap map[string]*rate.Limiter = make(map[string]*rate.Limiter)
 
-func rateLimitMiddleware(next http.Handler) http.Handler {
+func (rl *RateLimit) RateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := r.RemoteAddr
 
@@ -19,8 +26,8 @@ func rateLimitMiddleware(next http.Handler) http.Handler {
 		}
 
 		if !limiter.Allow() {
-			contextLogger.WarnContext(r.Context(), constants.MessageRateLimited)
-			writeErrorResponse(r.Context(), w, http.StatusTooManyRequests, constants.ErrorRateLimit)
+			rl.logger.WarnContext(r.Context(), constants.MessageRateLimited)
+			rl.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusTooManyRequests, constants.ErrorRateLimit)
 			return
 		}
 

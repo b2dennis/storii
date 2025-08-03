@@ -12,7 +12,8 @@ import (
 )
 
 type JWT struct {
-	jwtService *auth.JWTService
+	jwtService     *auth.JWTService
+	responseWriter *utils.ResponseWriter
 }
 
 func extractJWTFromHeader(r *http.Request) (string, error) {
@@ -33,13 +34,13 @@ func (j *JWT) JwtMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tokenString, err := extractJWTFromHeader(r)
 		if err != nil {
-			utils.WriteErrorResponse(r.Context(), w, http.StatusUnauthorized, "Unauthorized: "+err.Error())
+			j.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusUnauthorized, "Unauthorized: "+err.Error())
 			return
 		}
 
 		claims, err := j.jwtService.ValidateJWT(tokenString)
 		if err != nil {
-			utils.WriteErrorResponse(r.Context(), w, http.StatusUnauthorized, "Unauthorized: "+err.Error())
+			j.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusUnauthorized, "Unauthorized: "+err.Error())
 			return
 		}
 

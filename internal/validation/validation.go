@@ -7,14 +7,20 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-var validate *validator.Validate
+type Validator struct {
+	validate *validator.Validate
+}
 
-func initValidator() {
-	validate = validator.New()
+func NewValidator() *Validator {
+	validate := validator.New()
 
 	validate.RegisterValidation("password_strength", validatePasswordStrength)
 	validate.RegisterValidation("username_format", validateUsernameFormat)
 	validate.RegisterValidation("password_name", validatePasswordName)
+
+	return &Validator{
+		validate,
+	}
 }
 
 func validatePasswordStrength(fl validator.FieldLevel) bool {
@@ -94,10 +100,10 @@ func validatePasswordName(fl validator.FieldLevel) bool {
 	return true
 }
 
-func ValidateStruct(s any) []string {
+func (v *Validator) ValidateStruct(s any) []string {
 	var errors []string
 
-	err := validate.Struct(s)
+	err := v.validate.Struct(s)
 	if err != nil {
 		for _, err := range err.(validator.ValidationErrors) {
 			errors = append(errors, formatValidationError(err))

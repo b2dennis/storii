@@ -6,21 +6,13 @@ import (
 	"net/http"
 )
 
-var handlerOptions *slog.HandlerOptions = &slog.HandlerOptions{
-	AddSource: true,
+type Log struct {
+	logger *slog.Logger
 }
 
-var contextLogger *slog.Logger
-
-func initLogger() {
-	contextLogger = slog.New(&ContextHandler{
-		slog.NewTextHandler(config.LogOutput, handlerOptions),
-	})
-}
-
-func loggingMiddleware(next http.Handler) http.Handler {
+func (l *Log) LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		contextLogger.InfoContext(r.Context(), constants.MessageNewRequest)
+		l.logger.InfoContext(r.Context(), constants.MessageNewRequest)
 
 		next.ServeHTTP(w, r)
 	})
