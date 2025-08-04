@@ -2,6 +2,7 @@ package apihandlers
 
 import (
 	"b2dennis/pwman-api/internal/constants"
+	"b2dennis/pwman-api/internal/db"
 	"b2dennis/pwman-api/internal/middleware"
 	"b2dennis/pwman-api/internal/models"
 	"b2dennis/pwman-api/internal/utils"
@@ -21,14 +22,16 @@ type PasswordHandlerManager struct {
 	logger         *slog.Logger
 	responseWriter *utils.ResponseWriter
 	validator      *validation.Validator
+	dbm            *db.DbManager
 }
 
-func NewPasswordHandlerManager(jwt *middleware.JWT, logger *slog.Logger, responseWriter *utils.ResponseWriter, validator *validation.Validator) *PasswordHandlerManager {
+func NewPasswordHandlerManager(jwt *middleware.JWT, logger *slog.Logger, responseWriter *utils.ResponseWriter, validator *validation.Validator, dbm *db.DbManager) *PasswordHandlerManager {
 	return &PasswordHandlerManager{
 		jwt:            jwt,
 		logger:         logger,
 		responseWriter: responseWriter,
 		validator:      validator,
+		dbm:            dbm,
 	}
 }
 
@@ -72,7 +75,7 @@ func (phm *PasswordHandlerManager) getPasswords(w http.ResponseWriter, r *http.R
 	}
 
 	var storedPasswords []models.StoredPassword
-	db.Where("user_id = ?", uint(UserID)).Find(&storedPasswords)
+	phm.dbm.Db.Where("user_id = ?", uint(UserID)).Find(&storedPasswords)
 
 	responsePasswords := make([]models.ResponsePassword, len(storedPasswords))
 
@@ -119,7 +122,7 @@ func (phm *PasswordHandlerManager) addPassword(w http.ResponseWriter, r *http.Re
 	}
 
 	var existing models.StoredPassword
-	result := db.Where("user_id = ? AND name = ?", UserID, addPasswordRequest.Name).First(&existing)
+	result := phm.dbm.Db.Where("user_id = ? AND name = ?", UserID, addPasswordRequest.Name).First(&existing)
 	if result.RowsAffected > 0 {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorDuplicatePassword)
 		return
@@ -159,7 +162,7 @@ func (phm *PasswordHandlerManager) addPassword(w http.ResponseWriter, r *http.Re
 		AssociatedURL: addPasswordRequest.AssociatedURL,
 	}
 
-	result = db.Create(newPassword)
+	result = phm.dbm.Db.Create(newPassword)
 	if result.RowsAffected == 0 {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorCreationFailed, "Could not create password")
 		return
@@ -204,13 +207,13 @@ func (phm *PasswordHandlerManager) deletePassword(w http.ResponseWriter, r *http
 	}
 
 	var existingPassword models.StoredPassword
-	result := db.Where("user_id = ? AND name = ?", UserID, deletePasswordRequest.Name).First(&existingPassword)
+	result := phm.dbm.Db.Where("user_id = ? AND name = ?", UserID, deletePasswordRequest.Name).First(&existingPassword)
 	if result.RowsAffected == 0 {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusNotFound, constants.ErrorNotFound)
 		return
 	}
 
-	result = db.Delete(&existingPassword)
+	result = phm.dbm.Db.Delete(&existingPassword)
 	if result.RowsAffected == 0 {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Failed to delete password")
 		return
@@ -248,7 +251,7 @@ func (phm *PasswordHandlerManager) updatePassword(w http.ResponseWriter, r *http
 	}
 
 	var existingPassword models.StoredPassword
-	result := db.Where("user_id = ? AND name = ?", UserID, updatePasswordRequest.Name).First(&existingPassword)
+	result := phm.dbm.Db.Where("user_id = ? AND name = ?", UserID, updatePasswordRequest.Name).First(&existingPassword)
 	if result.RowsAffected == 0 {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusNotFound, constants.ErrorNotFound)
 		return
@@ -285,7 +288,7 @@ func (phm *PasswordHandlerManager) updatePassword(w http.ResponseWriter, r *http
 	existingPassword.Salt = salt
 	existingPassword.AssociatedURL = updatePasswordRequest.AssociatedURL
 
-	result = db.Save(existingPassword)
+	result = phm.dbm.Db.Save(existingPassword)
 	if result.RowsAffected == 0 {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorCreationFailed, "Could not create password")
 		return

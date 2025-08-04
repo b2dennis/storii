@@ -4,6 +4,7 @@ import (
 	"b2dennis/pwman-api/internal/apihandlers"
 	"b2dennis/pwman-api/internal/auth"
 	"b2dennis/pwman-api/internal/config"
+	"b2dennis/pwman-api/internal/db"
 	"b2dennis/pwman-api/internal/logging"
 	"b2dennis/pwman-api/internal/middleware"
 	"b2dennis/pwman-api/internal/utils"
@@ -26,11 +27,14 @@ type Server struct {
 	rateLimit      *middleware.RateLimit
 	jwt            *middleware.JWT
 	jwtService     *auth.JWTService
+	dbm            *db.DbManager
 }
 
 func NewServer() Server {
 	godotenv.Load()
 	config := config.LoadConfig()
+
+	dbm := db.NewDbManager(config)
 
 	logger := logging.NewLogger(config)
 	log := middleware.NewLog(logger)
@@ -56,6 +60,7 @@ func NewServer() Server {
 		rateLimit:      rateLimit,
 		jwt:            jwt,
 		jwtService:     jwtService,
+		dbm:            dbm,
 	}
 }
 
@@ -70,30 +75,10 @@ func (s *Server) Run() {
 	)(s.router))
 }
 
-func main() {
-	contextLogger.Info("Initializing DB connection")
-	var err error
-	db, err = gorm.Open(sqlite.Open(config.DBPath), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	if err != nil {
-		panic(fmt.Sprintf("failed to connect to database: %s", config.DBPath))
-	}
-
-	contextLogger.Info("Running DB migrations")
-	runDbMigrations()
-
-}
-
 func (s *Server) registerHandlers() {
-	passwordHandlerManager := apihandlers.NewPasswordHandlerManager(s.jwt, s.logger, s.responseWriter, s.validator)
+	passwordHandlerManager := apihandlers.NewPasswordHandlerManager(s.jwt, s.logger, s.responseWriter, s.validator, s.dbm)
 	passwordHandlerManager.RegisterPasswordHandlers(s.router)
 
-	userHandlerManager := apihandlers.NewUserHandlerManager(s.jwt, s.jwtService, s.logger, s.responseWriter, s.validator)
+	userHandlerManager := apihandlers.NewUserHandlerManager(s.jwt, s.jwtService, s.logger, s.responseWriter, s.validator, s.dbm)
 	userHandlerManager.RegisterUserHandlers(s.router)
-}
-
-func runDbMigrations() {
-	db.AutoMigrate(&StoredPassword{})
-	db.AutoMigrate(&User{})
 }

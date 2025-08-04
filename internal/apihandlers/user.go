@@ -3,6 +3,7 @@ package apihandlers
 import (
 	"b2dennis/pwman-api/internal/auth"
 	"b2dennis/pwman-api/internal/constants"
+	"b2dennis/pwman-api/internal/db"
 	"b2dennis/pwman-api/internal/middleware"
 	"b2dennis/pwman-api/internal/models"
 	"b2dennis/pwman-api/internal/utils"
@@ -23,6 +24,17 @@ type UserHandlerManager struct {
 	logger         *slog.Logger
 	responseWriter *utils.ResponseWriter
 	validator      *validation.Validator
+	dbm            *db.DbManager
+}
+
+func NewUserHandlerManager(jwt *middleware.JWT, jwtService *auth.JWTService, logger *slog.Logger, responseWriter *utils.ResponseWriter, validator *validation.Validator, dbm *db.DbManager) *UserHandlerManager {
+	return &UserHandlerManager{
+		jwt:            jwt,
+		jwtService:     jwtService,
+		logger:         logger,
+		responseWriter: responseWriter,
+		validator:      validator,
+	}
 }
 
 func (uhm *UserHandlerManager) RegisterUserHandlers(r *mux.Router) {
@@ -74,7 +86,7 @@ func (uhm *UserHandlerManager) createUser(w http.ResponseWriter, r *http.Request
 	}
 
 	var existingUser models.User
-	result := db.Where("username = ?", createUserRequest.Username).First(&existingUser)
+	result := uhm.dbm.Db.Where("username = ?", createUserRequest.Username).First(&existingUser)
 	if result.RowsAffected > 0 {
 		uhm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusConflict, constants.ErrorUserExists, "Username already exists")
 		return
@@ -91,7 +103,7 @@ func (uhm *UserHandlerManager) createUser(w http.ResponseWriter, r *http.Request
 		PasswordHash: passwordHash,
 	}
 
-	result = db.Create(newUser)
+	result = uhm.dbm.Db.Create(newUser)
 	if result.RowsAffected == 0 {
 		uhm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorCreationFailed, "User creation failed")
 		return
@@ -125,7 +137,7 @@ func (uhm *UserHandlerManager) loginUser(w http.ResponseWriter, r *http.Request)
 	}
 
 	var user models.User
-	result := db.Where("username = ?", loginRequest.Username).First(&user)
+	result := uhm.dbm.Db.Where("username = ?", loginRequest.Username).First(&user)
 	if result.RowsAffected == 0 {
 		uhm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusUnauthorized, constants.ErrorInvalidCredentials)
 		return
@@ -164,13 +176,13 @@ func (uhm *UserHandlerManager) deleteUser(w http.ResponseWriter, r *http.Request
 	}
 
 	var existingUser models.User
-	result := db.Where("id = ?", UserID).First(&existingUser)
+	result := uhm.dbm.Db.Where("id = ?", UserID).First(&existingUser)
 	if result.RowsAffected == 0 {
 		uhm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusNotFound, constants.ErrorNotFound)
 		return
 	}
 
-	result = db.Delete(&existingUser)
+	result = uhm.dbm.Db.Delete(&existingUser)
 
 	response := models.DeleteUserSuccess{
 		UserID: existingUser.ID,
@@ -203,7 +215,7 @@ func (uhm *UserHandlerManager) updateUser(w http.ResponseWriter, r *http.Request
 	}
 
 	var existingUser models.User
-	result := db.Where("id = ?", UserID).First(&existingUser)
+	result := uhm.dbm.Db.Where("id = ?", UserID).First(&existingUser)
 	if result.RowsAffected == 0 {
 		uhm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusNotFound, constants.ErrorNotFound)
 		return
@@ -218,7 +230,7 @@ func (uhm *UserHandlerManager) updateUser(w http.ResponseWriter, r *http.Request
 	existingUser.Username = updateUserRequest.Username
 	existingUser.PasswordHash = password
 
-	result = db.Save(&existingUser)
+	result = uhm.dbm.Db.Save(&existingUser)
 	if result.RowsAffected == 0 {
 		uhm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not update user DB entry")
 	}
