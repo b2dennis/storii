@@ -16,17 +16,14 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/glebarez/sqlite"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 func setupTestConfig() *config.Config {
@@ -37,10 +34,6 @@ func setupTestConfig() *config.Config {
 		DBPath:    ":memory:",
 	}
 	return testConfig
-}
-
-func setupLogger(conf *config.Config) *slog.Logger {
-	return logging.NewLogger(conf)
 }
 
 func setupValidator() *validation.Validator {
@@ -935,34 +928,42 @@ func TestWriteErrorResponse(t *testing.T) {
 }
 
 func TestWriteSuccessResponse(t *testing.T) {
-	setupTestServer()
+	conf := setupTestConfig()
+	logger := logging.NewLogger(conf)
+	responseWriter := utils.NewResponseWriter(logger)
 
 	w := httptest.NewRecorder()
 	ctx := context.Background()
 	testData := map[string]string{"test": "data"}
 
-	writeSuccessResponse(ctx, w, testData, http.StatusCreated)
+	responseWriter.WriteSuccessResponse(ctx, w, testData, http.StatusCreated)
 
 	if w.Code != http.StatusCreated {
 		t.Errorf("Expected status %d, got %d", http.StatusCreated, w.Code)
 	}
 
-	var response SuccessResponse
+	var response models.SuccessResponse
 	json.NewDecoder(w.Body).Decode(&response)
 
-	if response.Message != ResponseSuccess {
-		t.Errorf("Expected message %s, got %s", ResponseSuccess, response.Message)
+	if response.Message != constants.ResponseSuccess {
+		t.Errorf("Expected message %s, got %s", constants.ResponseSuccess, response.Message)
 	}
 }
 
 // Integration test
 func TestUserPasswordFlow(t *testing.T) {
-	setupTestServer()
-	testDB := setupTestDB(t)
-	db = testDB
+	conf := setupTestConfig()
+	jwtService := setupJWTService(conf)
+	logger := logging.NewLogger(conf)
+	responseWriter := utils.NewResponseWriter(logger)
+	jwt := middleware.NewJWT(jwtService, responseWriter)
+	validator := setupValidator()
+	dbm := db.NewDbManager(conf)
+	phm := apihandlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
+	uhm := apihandlers.NewUserHandlerManager(jwt, jwtService, logger, responseWriter, validator, dbm)
 
 	// 1. Create user
-	createUserReq := CreateUserRequest{
+	createUserReq := models.CreateUserRequest{
 		Username: "integrationuser",
 		Password: "IntegrationTest123!",
 	}
@@ -972,14 +973,14 @@ func TestUserPasswordFlow(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	createUser(w, req)
+	uhm.CreateUser(w, req)
 
 	if w.Code != http.StatusCreated {
 		t.Fatalf("Failed to create user: status %d", w.Code)
 	}
 
 	// 2. Login user
-	loginReq := LoginRequest{
+	loginReq := models.LoginRequest{
 		Username: "integrationuser",
 		Password: "IntegrationTest123!",
 	}
@@ -989,14 +990,14 @@ func TestUserPasswordFlow(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
 
-	loginUser(w, req)
+	uhm.LoginUser(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("Failed to login user: status %d", w.Code)
 	}
 
-	var loginResponse SuccessResponse
-	var loginData LoginSuccess
+	var loginResponse models.SuccessResponse
+	var loginData models.LoginSuccess
 	json.NewDecoder(w.Body).Decode(&loginResponse)
 	dataBytes, _ := json.Marshal(loginResponse.Data)
 	json.Unmarshal(dataBytes, &loginData)
@@ -1009,7 +1010,7 @@ func TestUserPasswordFlow(t *testing.T) {
 	authTag := make([]byte, 16)
 	salt := make([]byte, 16)
 
-	addPasswordReq := AddPasswordRequest{
+	addPasswordReq := models.AddPasswordRequest{
 		Name:          "testsite",
 		Value:         hex.EncodeToString(value),
 		IV:            hex.EncodeToString(iv),
@@ -1024,7 +1025,7 @@ func TestUserPasswordFlow(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	w = httptest.NewRecorder()
 
-	jwtMiddleware(addPassword)(w, req)
+	jwt.JwtMiddleware(phm.AddPassword)(w, req)
 
 	if w.Code != http.StatusCreated {
 		t.Fatalf("Failed to add password: status %d", w.Code)
@@ -1035,14 +1036,14 @@ func TestUserPasswordFlow(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	w = httptest.NewRecorder()
 
-	jwtMiddleware(getPasswords)(w, req)
+	jwt.JwtMiddleware(phm.GetPasswords)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("Failed to get passwords: status %d", w.Code)
 	}
 
-	var getPasswordsResponse SuccessResponse
-	var passwordsData GetPasswordsSuccess
+	var getPasswordsResponse models.SuccessResponse
+	var passwordsData models.GetPasswordsSuccess
 	json.NewDecoder(w.Body).Decode(&getPasswordsResponse)
 	dataBytes, _ = json.Marshal(getPasswordsResponse.Data)
 	json.Unmarshal(dataBytes, &passwordsData)
@@ -1056,8 +1057,8 @@ func TestUserPasswordFlow(t *testing.T) {
 	}
 
 	// 5. Update password
-	updatePasswordReq := UpdatePasswordRequest{
-		AddPasswordRequest: AddPasswordRequest{
+	updatePasswordReq := models.UpdatePasswordRequest{
+		AddPasswordRequest: models.AddPasswordRequest{
 			Name:          "testsite",
 			Value:         hex.EncodeToString(value),
 			IV:            hex.EncodeToString(iv),
@@ -1074,14 +1075,14 @@ func TestUserPasswordFlow(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	w = httptest.NewRecorder()
 
-	jwtMiddleware(updatePassword)(w, req)
+	jwt.JwtMiddleware(phm.UpdatePassword)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("Failed to update password: status %d", w.Code)
 	}
 
 	// 6. Delete password
-	deletePasswordReq := DeletePasswordRequest{
+	deletePasswordReq := models.DeletePasswordRequest{
 		Name: "updated-testsite",
 	}
 
@@ -1091,7 +1092,7 @@ func TestUserPasswordFlow(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	w = httptest.NewRecorder()
 
-	jwtMiddleware(deletePassword)(w, req)
+	jwt.JwtMiddleware(phm.DeletePassword)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("Failed to delete password: status %d", w.Code)
@@ -1102,7 +1103,7 @@ func TestUserPasswordFlow(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	w = httptest.NewRecorder()
 
-	jwtMiddleware(getPasswords)(w, req)
+	jwt.JwtMiddleware(phm.GetPasswords)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("Failed to get passwords after deletion: status %d", w.Code)
@@ -1119,14 +1120,19 @@ func TestUserPasswordFlow(t *testing.T) {
 
 // Additional edge case tests
 func TestDeletePasswordNotFound(t *testing.T) {
-	setupTestServer()
-	testDB := setupTestDB(t)
-	db = testDB
+	conf := setupTestConfig()
+	jwtService := setupJWTService(conf)
+	logger := logging.NewLogger(conf)
+	responseWriter := utils.NewResponseWriter(logger)
+	jwt := middleware.NewJWT(jwtService, responseWriter)
+	validator := setupValidator()
+	dbm := db.NewDbManager(conf)
+	phm := apihandlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
 
-	testUser := createTestUser(t, testDB, "testuser", "ValidPassword123!")
-	token, _ := generateJWT(testUser)
+	testUser := createTestUser(t, dbm.Db, "testuser", "ValidPassword123!")
+	token, _ := jwtService.GenerateJWT(testUser)
 
-	deletePasswordReq := DeletePasswordRequest{
+	deletePasswordReq := models.DeletePasswordRequest{
 		Name: "nonexistent",
 	}
 
@@ -1136,7 +1142,7 @@ func TestDeletePasswordNotFound(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
 
-	jwtMiddleware(deletePassword)(w, req)
+	jwt.JwtMiddleware(phm.DeletePassword)(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("Expected status %d, got %d", http.StatusNotFound, w.Code)
@@ -1144,20 +1150,25 @@ func TestDeletePasswordNotFound(t *testing.T) {
 }
 
 func TestUpdatePasswordNotFound(t *testing.T) {
-	setupTestServer()
-	testDB := setupTestDB(t)
-	db = testDB
+	conf := setupTestConfig()
+	jwtService := setupJWTService(conf)
+	logger := logging.NewLogger(conf)
+	responseWriter := utils.NewResponseWriter(logger)
+	jwt := middleware.NewJWT(jwtService, responseWriter)
+	validator := setupValidator()
+	dbm := db.NewDbManager(conf)
+	phm := apihandlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
 
-	testUser := createTestUser(t, testDB, "testuser", "ValidPassword123!")
-	token, _ := generateJWT(testUser)
+	testUser := createTestUser(t, dbm.Db, "testuser", "ValidPassword123!")
+	token, _ := jwtService.GenerateJWT(testUser)
 
 	value := make([]byte, 256)
 	iv := make([]byte, 12)
 	authTag := make([]byte, 16)
 	salt := make([]byte, 16)
 
-	updatePasswordReq := UpdatePasswordRequest{
-		AddPasswordRequest: AddPasswordRequest{
+	updatePasswordReq := models.UpdatePasswordRequest{
+		AddPasswordRequest: models.AddPasswordRequest{
 			Name:          "nonexistent",
 			Value:         hex.EncodeToString(value),
 			IV:            hex.EncodeToString(iv),
@@ -1174,7 +1185,7 @@ func TestUpdatePasswordNotFound(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
 
-	jwtMiddleware(updatePassword)(w, req)
+	jwt.JwtMiddleware(phm.UpdatePassword)(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("Expected status %d, got %d", http.StatusNotFound, w.Code)
@@ -1182,40 +1193,50 @@ func TestUpdatePasswordNotFound(t *testing.T) {
 }
 
 func TestDeleteUserSuccess(t *testing.T) {
-	setupTestServer()
-	testDB := setupTestDB(t)
-	db = testDB
+	conf := setupTestConfig()
+	jwtService := setupJWTService(conf)
+	logger := logging.NewLogger(conf)
+	responseWriter := utils.NewResponseWriter(logger)
+	jwt := middleware.NewJWT(jwtService, responseWriter)
+	validator := setupValidator()
+	dbm := db.NewDbManager(conf)
+	uhm := apihandlers.NewUserHandlerManager(jwt, jwtService, logger, responseWriter, validator, dbm)
 
-	testUser := createTestUser(t, testDB, "testuser", "ValidPassword123!")
-	token, _ := generateJWT(testUser)
+	testUser := createTestUser(t, dbm.Db, "testuser", "ValidPassword123!")
+	token, _ := jwtService.GenerateJWT(testUser)
 
 	req := httptest.NewRequest("DELETE", "/user/delete", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
 
-	jwtMiddleware(deleteUser)(w, req)
+	jwt.JwtMiddleware(uhm.DeleteUser)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
 	// Verify user is deleted
-	var user User
-	result := testDB.Where("id = ?", testUser.ID).First(&user)
+	var user models.User
+	result := dbm.Db.Where("id = ?", testUser.ID).First(&user)
 	if result.RowsAffected != 0 {
 		t.Error("User should be deleted but still exists")
 	}
 }
 
 func TestUpdateUserSuccess(t *testing.T) {
-	setupTestServer()
-	testDB := setupTestDB(t)
-	db = testDB
+	conf := setupTestConfig()
+	jwtService := setupJWTService(conf)
+	logger := logging.NewLogger(conf)
+	responseWriter := utils.NewResponseWriter(logger)
+	jwt := middleware.NewJWT(jwtService, responseWriter)
+	validator := setupValidator()
+	dbm := db.NewDbManager(conf)
+	uhm := apihandlers.NewUserHandlerManager(jwt, jwtService, logger, responseWriter, validator, dbm)
 
-	testUser := createTestUser(t, testDB, "testuser", "ValidPassword123!")
-	token, _ := generateJWT(testUser)
+	testUser := createTestUser(t, dbm.Db, "testuser", "ValidPassword123!")
+	token, _ := jwtService.GenerateJWT(testUser)
 
-	updateUserReq := UpdateUserRequest{
+	updateUserReq := models.UpdateUserRequest{
 		Username: "updateduser",
 		Password: "UpdatedPassword123!",
 	}
@@ -1226,32 +1247,38 @@ func TestUpdateUserSuccess(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
 
-	jwtMiddleware(updateUser)(w, req)
+	jwt.JwtMiddleware(uhm.UpdateUser)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
 	// Verify user is updated
-	var user User
-	testDB.Where("id = ?", testUser.ID).First(&user)
+	var user models.User
+	dbm.Db.Where("id = ?", testUser.ID).First(&user)
 	if user.Username != "updateduser" {
 		t.Errorf("Expected username 'updateduser', got '%s'", user.Username)
 	}
 
 	// Verify password is updated
-	if !checkPasswordHash("UpdatedPassword123!", user.PasswordHash) {
+	if !auth.CheckPasswordHash("UpdatedPassword123!", user.PasswordHash) {
 		t.Error("Password was not updated correctly")
 	}
 }
 
 func TestInvalidJSONRequests(t *testing.T) {
-	setupTestServer()
-	testDB := setupTestDB(t)
-	db = testDB
+	conf := setupTestConfig()
+	jwtService := setupJWTService(conf)
+	logger := logging.NewLogger(conf)
+	responseWriter := utils.NewResponseWriter(logger)
+	jwt := middleware.NewJWT(jwtService, responseWriter)
+	validator := setupValidator()
+	dbm := db.NewDbManager(conf)
+	phm := apihandlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
+	uhm := apihandlers.NewUserHandlerManager(jwt, jwtService, logger, responseWriter, validator, dbm)
 
-	testUser := createTestUser(t, testDB, "testuser", "ValidPassword123!")
-	token, _ := generateJWT(testUser)
+	testUser := createTestUser(t, dbm.Db, "testuser", "ValidPassword123!")
+	token, _ := jwtService.GenerateJWT(testUser)
 
 	tests := []struct {
 		name    string
@@ -1263,7 +1290,7 @@ func TestInvalidJSONRequests(t *testing.T) {
 	}{
 		{
 			name:    "Create user with invalid JSON",
-			handler: createUser,
+			handler: uhm.CreateUser,
 			method:  "POST",
 			path:    "/user/register",
 			body:    `{"invalid": json}`,
@@ -1271,7 +1298,7 @@ func TestInvalidJSONRequests(t *testing.T) {
 		},
 		{
 			name:    "Login with invalid JSON",
-			handler: loginUser,
+			handler: uhm.LoginUser,
 			method:  "POST",
 			path:    "/user/login",
 			body:    `{"invalid": json}`,
@@ -1279,7 +1306,7 @@ func TestInvalidJSONRequests(t *testing.T) {
 		},
 		{
 			name:    "Add password with invalid JSON",
-			handler: jwtMiddleware(addPassword),
+			handler: jwt.JwtMiddleware(phm.AddPassword),
 			method:  "POST",
 			path:    "/password/create",
 			body:    `{"invalid": json}`,
@@ -1287,7 +1314,7 @@ func TestInvalidJSONRequests(t *testing.T) {
 		},
 		{
 			name:    "Update user with invalid JSON",
-			handler: jwtMiddleware(updateUser),
+			handler: jwt.JwtMiddleware(uhm.UpdateUser),
 			method:  "PUT",
 			path:    "/user/update",
 			body:    `{"invalid": json}`,
@@ -1310,38 +1337,43 @@ func TestInvalidJSONRequests(t *testing.T) {
 				t.Errorf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
 			}
 
-			var errorResp ErrorResponse
+			var errorResp models.ErrorResponse
 			json.NewDecoder(w.Body).Decode(&errorResp)
-			if errorResp.Error != ErrorInvalidJson {
-				t.Errorf("Expected error code %s, got %s", ErrorInvalidJson, errorResp.Error)
+			if errorResp.Error != constants.ErrorInvalidJson {
+				t.Errorf("Expected error code %s, got %s", constants.ErrorInvalidJson, errorResp.Error)
 			}
 		})
 	}
 }
 
 func TestPasswordIsolationBetweenUsers(t *testing.T) {
-	setupTestServer()
-	testDB := setupTestDB(t)
-	db = testDB
+	conf := setupTestConfig()
+	jwtService := setupJWTService(conf)
+	logger := logging.NewLogger(conf)
+	responseWriter := utils.NewResponseWriter(logger)
+	jwt := middleware.NewJWT(jwtService, responseWriter)
+	validator := setupValidator()
+	dbm := db.NewDbManager(conf)
+	phm := apihandlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
 
 	// Create two users
-	user1 := createTestUser(t, testDB, "user1", "ValidPassword123!")
-	user2 := createTestUser(t, testDB, "user2", "ValidPassword123!")
+	user1 := createTestUser(t, dbm.Db, "user1", "ValidPassword123!")
+	user2 := createTestUser(t, dbm.Db, "user2", "ValidPassword123!")
 
 	// Create passwords for both users
-	createTestPassword(t, testDB, user1.ID, "user1password")
-	createTestPassword(t, testDB, user2.ID, "user2password")
+	createTestPassword(t, dbm.Db, user1.ID, "user1password")
+	createTestPassword(t, dbm.Db, user2.ID, "user2password")
 
 	// Get passwords for user1
-	token1, _ := generateJWT(user1)
+	token1, _ := jwtService.GenerateJWT(user1)
 	req := httptest.NewRequest("GET", "/password", nil)
 	req.Header.Set("Authorization", "Bearer "+token1)
 	w := httptest.NewRecorder()
 
-	jwtMiddleware(getPasswords)(w, req)
+	jwt.JwtMiddleware(phm.GetPasswords)(w, req)
 
-	var response SuccessResponse
-	var passwordsData GetPasswordsSuccess
+	var response models.SuccessResponse
+	var passwordsData models.GetPasswordsSuccess
 	json.NewDecoder(w.Body).Decode(&response)
 	dataBytes, _ := json.Marshal(response.Data)
 	json.Unmarshal(dataBytes, &passwordsData)
@@ -1355,12 +1387,12 @@ func TestPasswordIsolationBetweenUsers(t *testing.T) {
 	}
 
 	// Get passwords for user2
-	token2, _ := generateJWT(user2)
+	token2, _ := jwtService.GenerateJWT(user2)
 	req = httptest.NewRequest("GET", "/password", nil)
 	req.Header.Set("Authorization", "Bearer "+token2)
 	w = httptest.NewRecorder()
 
-	jwtMiddleware(getPasswords)(w, req)
+	jwt.JwtMiddleware(phm.GetPasswords)(w, req)
 
 	json.NewDecoder(w.Body).Decode(&response)
 	dataBytes, _ = json.Marshal(response.Data)
@@ -1380,39 +1412,43 @@ func BenchmarkHashPassword(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = hashPassword(password)
+		_, _ = auth.HashPassword(password)
 	}
 }
 
 func BenchmarkCheckPasswordHash(b *testing.B) {
 	password := "BenchmarkPassword123!"
-	hash, _ := hashPassword(password)
+	hash, _ := auth.HashPassword(password)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = checkPasswordHash(password, hash)
+		_ = auth.CheckPasswordHash(password, hash)
 	}
 }
 
 func BenchmarkGenerateJWT(b *testing.B) {
-	setupTestServer()
-	user := User{Username: "benchuser"}
+	conf := setupTestConfig()
+	jwtService := auth.NewJWTService(conf)
+
+	user := models.User{Username: "benchuser"}
 	user.ID = 1
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = generateJWT(user)
+		_, _ = jwtService.GenerateJWT(user)
 	}
 }
 
 func BenchmarkValidateJWT(b *testing.B) {
-	setupTestServer()
-	user := User{Username: "benchuser"}
+	conf := setupTestConfig()
+	jwtService := auth.NewJWTService(conf)
+
+	user := models.User{Username: "benchuser"}
 	user.ID = 1
-	token, _ := generateJWT(user)
+	token, _ := jwtService.GenerateJWT(user)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = validateJWT(token)
+		_, _ = jwtService.ValidateJWT(token)
 	}
 }

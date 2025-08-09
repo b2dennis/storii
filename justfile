@@ -23,3 +23,15 @@ clean:
   @echo "==> Cleaning all build artifacts..."
   @rm -rf {{BUILD_DIR}}
 
+test-api *FLAGS="":
+  @echo "==> Running API server tests"
+  @go test {{API_CMD_DIR}} {{FLAGS}}
+
+test-cli *FLAGS="":
+  @echo "==> Running CLI client tests"
+  @go test {{CLI_CMD_DIR}} {{FLAGS}}
+
+test *FLAGS="": (test-api FLAGS) (test-cli FLAGS)
+  @echo "==> ✅ All tests complete!"
+
+full: (test "-v") build
