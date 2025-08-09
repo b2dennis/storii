@@ -2,6 +2,7 @@ package apihandlers
 
 import (
 	"b2dennis/pwman-api/internal/constants"
+	"b2dennis/pwman-api/internal/db"
 	"b2dennis/pwman-api/internal/middleware"
 	"b2dennis/pwman-api/internal/models"
 	"b2dennis/pwman-api/internal/utils"
@@ -21,36 +22,38 @@ type PasswordHandlerManager struct {
 	logger         *slog.Logger
 	responseWriter *utils.ResponseWriter
 	validator      *validation.Validator
+	dbm            *db.DbManager
 }
 
-func NewPasswordHandlerManager(jwt *middleware.JWT, logger *slog.Logger, responseWriter *utils.ResponseWriter, validator *validation.Validator) *PasswordHandlerManager {
+func NewPasswordHandlerManager(jwt *middleware.JWT, logger *slog.Logger, responseWriter *utils.ResponseWriter, validator *validation.Validator, dbm *db.DbManager) *PasswordHandlerManager {
 	return &PasswordHandlerManager{
 		jwt:            jwt,
 		logger:         logger,
 		responseWriter: responseWriter,
 		validator:      validator,
+		dbm:            dbm,
 	}
 }
 
 func (phm *PasswordHandlerManager) RegisterPasswordHandlers(r *mux.Router) {
 	var passwordHandlers []models.RequestHandlerStruct = []models.RequestHandlerStruct{
 		{
-			Handler: phm.jwt.JwtMiddleware(phm.getPasswords),
+			Handler: phm.jwt.JwtMiddleware(phm.GetPasswords),
 			Method:  http.MethodGet,
 			Route:   constants.PasswordRouteFetch,
 		},
 		{
-			Handler: phm.jwt.JwtMiddleware(phm.addPassword),
+			Handler: phm.jwt.JwtMiddleware(phm.AddPassword),
 			Method:  http.MethodPost,
 			Route:   constants.PasswordRouteAdd,
 		},
 		{
-			Handler: phm.jwt.JwtMiddleware(phm.deletePassword),
+			Handler: phm.jwt.JwtMiddleware(phm.DeletePassword),
 			Method:  http.MethodDelete,
 			Route:   constants.PasswordRouteDelete,
 		},
 		{
-			Handler: phm.jwt.JwtMiddleware(phm.updatePassword),
+			Handler: phm.jwt.JwtMiddleware(phm.UpdatePassword),
 			Method:  http.MethodPut,
 			Route:   constants.PasswordRouteUpdate,
 		},
@@ -63,7 +66,7 @@ func (phm *PasswordHandlerManager) RegisterPasswordHandlers(r *mux.Router) {
 	}
 }
 
-func (phm *PasswordHandlerManager) getPasswords(w http.ResponseWriter, r *http.Request) {
+func (phm *PasswordHandlerManager) GetPasswords(w http.ResponseWriter, r *http.Request) {
 	userIDStr := r.Header.Get(constants.AuthHeaderUserID)
 	UserID, err := strconv.ParseUint(userIDStr, 10, 64)
 	if err != nil {
@@ -72,7 +75,7 @@ func (phm *PasswordHandlerManager) getPasswords(w http.ResponseWriter, r *http.R
 	}
 
 	var storedPasswords []models.StoredPassword
-	db.Where("user_id = ?", uint(UserID)).Find(&storedPasswords)
+	phm.dbm.Db.Where("user_id = ?", uint(UserID)).Find(&storedPasswords)
 
 	responsePasswords := make([]models.ResponsePassword, len(storedPasswords))
 
@@ -95,7 +98,7 @@ func (phm *PasswordHandlerManager) getPasswords(w http.ResponseWriter, r *http.R
 	phm.responseWriter.WriteSuccessResponse(r.Context(), w, response, http.StatusOK)
 }
 
-func (phm *PasswordHandlerManager) addPassword(w http.ResponseWriter, r *http.Request) {
+func (phm *PasswordHandlerManager) AddPassword(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	userIDStr := r.Header.Get(constants.AuthHeaderUserID)
@@ -119,7 +122,7 @@ func (phm *PasswordHandlerManager) addPassword(w http.ResponseWriter, r *http.Re
 	}
 
 	var existing models.StoredPassword
-	result := db.Where("user_id = ? AND name = ?", UserID, addPasswordRequest.Name).First(&existing)
+	result := phm.dbm.Db.Where("user_id = ? AND name = ?", UserID, addPasswordRequest.Name).First(&existing)
 	if result.RowsAffected > 0 {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorDuplicatePassword)
 		return
@@ -159,7 +162,7 @@ func (phm *PasswordHandlerManager) addPassword(w http.ResponseWriter, r *http.Re
 		AssociatedURL: addPasswordRequest.AssociatedURL,
 	}
 
-	result = db.Create(newPassword)
+	result = phm.dbm.Db.Create(newPassword)
 	if result.RowsAffected == 0 {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorCreationFailed, "Could not create password")
 		return
@@ -180,7 +183,7 @@ func (phm *PasswordHandlerManager) addPassword(w http.ResponseWriter, r *http.Re
 	phm.responseWriter.WriteSuccessResponse(r.Context(), w, response, http.StatusCreated)
 }
 
-func (phm *PasswordHandlerManager) deletePassword(w http.ResponseWriter, r *http.Request) {
+func (phm *PasswordHandlerManager) DeletePassword(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	userIDStr := r.Header.Get(constants.AuthHeaderUserID)
@@ -204,13 +207,13 @@ func (phm *PasswordHandlerManager) deletePassword(w http.ResponseWriter, r *http
 	}
 
 	var existingPassword models.StoredPassword
-	result := db.Where("user_id = ? AND name = ?", UserID, deletePasswordRequest.Name).First(&existingPassword)
+	result := phm.dbm.Db.Where("user_id = ? AND name = ?", UserID, deletePasswordRequest.Name).First(&existingPassword)
 	if result.RowsAffected == 0 {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusNotFound, constants.ErrorNotFound)
 		return
 	}
 
-	result = db.Delete(&existingPassword)
+	result = phm.dbm.Db.Delete(&existingPassword)
 	if result.RowsAffected == 0 {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Failed to delete password")
 		return
@@ -224,7 +227,7 @@ func (phm *PasswordHandlerManager) deletePassword(w http.ResponseWriter, r *http
 	phm.responseWriter.WriteSuccessResponse(r.Context(), w, response)
 }
 
-func (phm *PasswordHandlerManager) updatePassword(w http.ResponseWriter, r *http.Request) {
+func (phm *PasswordHandlerManager) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	UserIDStr := r.Header.Get(constants.AuthHeaderUserID)
@@ -248,7 +251,7 @@ func (phm *PasswordHandlerManager) updatePassword(w http.ResponseWriter, r *http
 	}
 
 	var existingPassword models.StoredPassword
-	result := db.Where("user_id = ? AND name = ?", UserID, updatePasswordRequest.Name).First(&existingPassword)
+	result := phm.dbm.Db.Where("user_id = ? AND name = ?", UserID, updatePasswordRequest.Name).First(&existingPassword)
 	if result.RowsAffected == 0 {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusNotFound, constants.ErrorNotFound)
 		return
@@ -285,7 +288,7 @@ func (phm *PasswordHandlerManager) updatePassword(w http.ResponseWriter, r *http
 	existingPassword.Salt = salt
 	existingPassword.AssociatedURL = updatePasswordRequest.AssociatedURL
 
-	result = db.Save(existingPassword)
+	result = phm.dbm.Db.Save(existingPassword)
 	if result.RowsAffected == 0 {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorCreationFailed, "Could not create password")
 		return

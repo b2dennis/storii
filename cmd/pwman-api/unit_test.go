@@ -2,53 +2,62 @@
 package main
 
 import (
+	"b2dennis/pwman-api/internal/auth"
+	"b2dennis/pwman-api/internal/config"
+	"b2dennis/pwman-api/internal/constants"
+	"b2dennis/pwman-api/internal/db"
+	"b2dennis/pwman-api/internal/handlers"
+	"b2dennis/pwman-api/internal/logging"
+	"b2dennis/pwman-api/internal/middleware"
+	"b2dennis/pwman-api/internal/models"
+	"b2dennis/pwman-api/internal/utils"
+	"b2dennis/pwman-api/internal/validation"
 	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/glebarez/sqlite"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-// Test setup helpers
-func setupTestDB(t *testing.T) *gorm.DB {
-	testDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	if err != nil {
-		t.Fatalf("Failed to connect to test database: %v", err)
+func setupTestConfig() *config.Config {
+	testConfig := &config.Config{
+		JWTSecret: "test-secret-key",
+		JWTExpiry: time.Hour * 24,
+		LogOutput: &bytes.Buffer{},
+		DBPath:    ":memory:",
 	}
-
-	err = testDB.AutoMigrate(&User{}, &StoredPassword{})
-	if err != nil {
-		t.Fatalf("Failed to migrate test database: %v", err)
-	}
-
-	return testDB
+	return testConfig
 }
 
-func setupTestConfig() {
-	config.JWTSecret = "test-secret-key"
-	config.JWTExpiry = time.Hour * 24
-	config.LogOutput = &bytes.Buffer{}
-	initLogger()
-	initValidator()
+func setupLogger(conf *config.Config) *slog.Logger {
+	return logging.NewLogger(conf)
 }
 
-func createTestUser(t *testing.T, db *gorm.DB, username, password string) User {
-	passwordHash, err := hashPassword(password)
+func setupValidator() *validation.Validator {
+	return validation.NewValidator()
+}
+
+func setupJWTService(conf *config.Config) *auth.JWTService {
+	return auth.NewJWTService(conf)
+}
+
+func createTestUser(t *testing.T, db *gorm.DB, username, password string) models.User {
+	passwordHash, err := auth.HashPassword(password)
 	if err != nil {
 		t.Fatalf("Failed to hash test password: %v", err)
 	}
 
-	user := User{
+	user := models.User{
 		Username:     username,
 		PasswordHash: passwordHash,
 	}
@@ -61,8 +70,8 @@ func createTestUser(t *testing.T, db *gorm.DB, username, password string) User {
 	return user
 }
 
-func createTestPassword(t *testing.T, db *gorm.DB, userID uint, name string) StoredPassword {
-	password := StoredPassword{
+func createTestPassword(t *testing.T, db *gorm.DB, userID uint, name string) models.StoredPassword {
+	password := models.StoredPassword{
 		UserID:        userID,
 		Name:          name,
 		Value:         make([]byte, 256),
@@ -95,23 +104,24 @@ func createTestPassword(t *testing.T, db *gorm.DB, userID uint, name string) Sto
 
 // Auth tests
 func TestGenerateJWT(t *testing.T) {
-	setupTestConfig()
+	conf := setupTestConfig()
+	jwt := setupJWTService(conf)
 
 	tests := []struct {
 		name        string
-		user        User
+		user        models.User
 		expectError bool
 	}{
 		{
 			name: "Valid user",
-			user: User{
+			user: models.User{
 				Username: "testuser",
 			},
 			expectError: false,
 		},
 		{
 			name: "User with ID",
-			user: User{
+			user: models.User{
 				Username: "testuser",
 			},
 			expectError: false,
@@ -121,7 +131,7 @@ func TestGenerateJWT(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.user.ID = 1
-			token, err := generateJWT(tt.user)
+			token, err := jwt.GenerateJWT(tt.user)
 
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
@@ -137,12 +147,13 @@ func TestGenerateJWT(t *testing.T) {
 }
 
 func TestValidateJWT(t *testing.T) {
-	setupTestConfig()
+	conf := setupTestConfig()
+	jwt := setupJWTService(conf)
 
-	user := User{Username: "testuser"}
+	user := models.User{Username: "testuser"}
 	user.ID = 1
 
-	validToken, err := generateJWT(user)
+	validToken, err := jwt.GenerateJWT(user)
 	if err != nil {
 		t.Fatalf("Failed to generate test token: %v", err)
 	}
@@ -178,7 +189,7 @@ func TestValidateJWT(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			claims, err := validateJWT(tt.token)
+			claims, err := jwt.ValidateJWT(tt.token)
 
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
@@ -194,19 +205,20 @@ func TestValidateJWT(t *testing.T) {
 }
 
 func TestValidateJWTExpired(t *testing.T) {
-	setupTestConfig()
+	conf := setupTestConfig()
+	conf.JWTExpiry = -time.Hour
 
-	config.JWTExpiry = -time.Hour
+	jwt := setupJWTService(conf)
 
-	user := User{Username: "testuser"}
+	user := models.User{Username: "testuser"}
 	user.ID = 1
 
-	expiredToken, err := generateJWT(user)
+	expiredToken, err := jwt.GenerateJWT(user)
 	if err != nil {
 		t.Fatalf("Failed to generate expired token: %v", err)
 	}
 
-	_, err = validateJWT(expiredToken)
+	_, err = jwt.ValidateJWT(expiredToken)
 	if err == nil {
 		t.Error("Expected error for expired token but got none")
 	}
@@ -254,7 +266,7 @@ func TestExtractJWTFromHeader(t *testing.T) {
 				req.Header.Set("Authorization", tt.header)
 			}
 
-			token, err := extractJWTFromHeader(req)
+			token, err := middleware.ExtractJWTFromHeader(req)
 
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
@@ -294,7 +306,7 @@ func TestHashPassword(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hash, err := hashPassword(tt.password)
+			hash, err := auth.HashPassword(tt.password)
 
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
@@ -350,7 +362,7 @@ func TestCheckPasswordHash(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := checkPasswordHash(tt.password, tt.hash)
+			result := auth.CheckPasswordHash(tt.password, tt.hash)
 			if result != tt.expected {
 				t.Errorf("Expected %v, got %v", tt.expected, result)
 			}
@@ -360,7 +372,7 @@ func TestCheckPasswordHash(t *testing.T) {
 
 // Validation tests
 func TestValidatePasswordStrength(t *testing.T) {
-	setupTestConfig()
+	val := setupValidator()
 
 	tests := []struct {
 		name     string
@@ -401,12 +413,12 @@ func TestValidatePasswordStrength(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			request := CreateUserRequest{
+			request := models.CreateUserRequest{
 				Username: "testuser",
 				Password: tt.password,
 			}
 
-			errors := validateStruct(request)
+			errors := val.ValidateStruct(request)
 			hasPasswordError := len(errors) > 0
 
 			if tt.expected && hasPasswordError {
@@ -420,7 +432,7 @@ func TestValidatePasswordStrength(t *testing.T) {
 }
 
 func TestValidateUsernameFormat(t *testing.T) {
-	setupTestConfig()
+	val := setupValidator()
 
 	tests := []struct {
 		name     string
@@ -466,12 +478,12 @@ func TestValidateUsernameFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			request := CreateUserRequest{
+			request := models.CreateUserRequest{
 				Username: tt.username,
 				Password: "ValidPassword123!",
 			}
 
-			errors := validateStruct(request)
+			errors := val.ValidateStruct(request)
 			hasUsernameFormatError := false
 			for _, err := range errors {
 				if strings.Contains(err, "username can only contain") {
@@ -492,19 +504,24 @@ func TestValidateUsernameFormat(t *testing.T) {
 
 // User handler tests
 func TestCreateUser(t *testing.T) {
-	setupTestConfig()
-	testDB := setupTestDB(t)
-	db = testDB
+	conf := setupTestConfig()
+	jwtService := setupJWTService(conf)
+	logger := logging.NewLogger(conf)
+	responseWriter := utils.NewResponseWriter(logger)
+	jwt := middleware.NewJWT(jwtService, responseWriter)
+	validator := setupValidator()
+	dbm := db.NewDbManager(conf)
+	uhm := apihandlers.NewUserHandlerManager(jwt, jwtService, logger, responseWriter, validator, dbm)
 
 	tests := []struct {
 		name           string
-		requestBody    CreateUserRequest
+		requestBody    models.CreateUserRequest
 		expectedStatus int
 		expectError    bool
 	}{
 		{
 			name: "Valid user creation",
-			requestBody: CreateUserRequest{
+			requestBody: models.CreateUserRequest{
 				Username: "testuser",
 				Password: "ValidPassword123!",
 			},
@@ -513,7 +530,7 @@ func TestCreateUser(t *testing.T) {
 		},
 		{
 			name: "Duplicate username",
-			requestBody: CreateUserRequest{
+			requestBody: models.CreateUserRequest{
 				Username: "testuser",
 				Password: "ValidPassword123!",
 			},
@@ -522,7 +539,7 @@ func TestCreateUser(t *testing.T) {
 		},
 		{
 			name: "Invalid password",
-			requestBody: CreateUserRequest{
+			requestBody: models.CreateUserRequest{
 				Username: "testuser2",
 				Password: "weak",
 			},
@@ -531,7 +548,7 @@ func TestCreateUser(t *testing.T) {
 		},
 		{
 			name: "Invalid username",
-			requestBody: CreateUserRequest{
+			requestBody: models.CreateUserRequest{
 				Username: "123invalid",
 				Password: "ValidPassword123!",
 			},
@@ -547,20 +564,20 @@ func TestCreateUser(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
-			createUser(w, req)
+			uhm.CreateUser(w, req)
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
 
 			if tt.expectError {
-				var errorResp ErrorResponse
+				var errorResp models.ErrorResponse
 				json.NewDecoder(w.Body).Decode(&errorResp)
 				if errorResp.Error == "" {
 					t.Error("Expected error response but got none")
 				}
 			} else {
-				var successResp SuccessResponse
+				var successResp models.SuccessResponse
 				json.NewDecoder(w.Body).Decode(&successResp)
 				if successResp.Message != "ok" {
 					t.Error("Expected success response")
@@ -571,21 +588,26 @@ func TestCreateUser(t *testing.T) {
 }
 
 func TestLoginUser(t *testing.T) {
-	setupTestConfig()
-	testDB := setupTestDB(t)
-	db = testDB
+	conf := setupTestConfig()
+	jwtService := setupJWTService(conf)
+	logger := logging.NewLogger(conf)
+	responseWriter := utils.NewResponseWriter(logger)
+	jwt := middleware.NewJWT(jwtService, responseWriter)
+	validator := setupValidator()
+	dbm := db.NewDbManager(conf)
+	uhm := apihandlers.NewUserHandlerManager(jwt, jwtService, logger, responseWriter, validator, dbm)
 
-	testUser := createTestUser(t, testDB, "testuser", "ValidPassword123!")
+	testUser := createTestUser(t, dbm.Db, "testuser", "ValidPassword123!")
 
 	tests := []struct {
 		name           string
-		requestBody    LoginRequest
+		requestBody    models.LoginRequest
 		expectedStatus int
 		expectError    bool
 	}{
 		{
 			name: "Valid login",
-			requestBody: LoginRequest{
+			requestBody: models.LoginRequest{
 				Username: "testuser",
 				Password: "ValidPassword123!",
 			},
@@ -594,7 +616,7 @@ func TestLoginUser(t *testing.T) {
 		},
 		{
 			name: "Wrong password",
-			requestBody: LoginRequest{
+			requestBody: models.LoginRequest{
 				Username: "testuser",
 				Password: "WrongPassword123!",
 			},
@@ -603,7 +625,7 @@ func TestLoginUser(t *testing.T) {
 		},
 		{
 			name: "Non-existent user",
-			requestBody: LoginRequest{
+			requestBody: models.LoginRequest{
 				Username: "nonexistent",
 				Password: "ValidPassword123!",
 			},
@@ -619,21 +641,21 @@ func TestLoginUser(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
-			loginUser(w, req)
+			uhm.LoginUser(w, req)
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
 
 			if tt.expectError {
-				var errorResp ErrorResponse
+				var errorResp models.ErrorResponse
 				json.NewDecoder(w.Body).Decode(&errorResp)
 				if errorResp.Error == "" {
 					t.Error("Expected error response but got none")
 				}
 			} else {
-				var successResp SuccessResponse
-				var loginResp LoginSuccess
+				var successResp models.SuccessResponse
+				var loginResp models.LoginSuccess
 				json.NewDecoder(w.Body).Decode(&successResp)
 
 				dataBytes, _ := json.Marshal(successResp.Data)
@@ -652,14 +674,19 @@ func TestLoginUser(t *testing.T) {
 
 // Password handler tests
 func TestGetPasswords(t *testing.T) {
-	setupTestConfig()
-	testDB := setupTestDB(t)
-	db = testDB
+	conf := setupTestConfig()
+	jwtService := setupJWTService(conf)
+	logger := logging.NewLogger(conf)
+	responseWriter := utils.NewResponseWriter(logger)
+	jwt := middleware.NewJWT(jwtService, responseWriter)
+	validator := setupValidator()
+	dbm := db.NewDbManager(conf)
+	phm := apihandlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
 
-	testUser := createTestUser(t, testDB, "testuser", "ValidPassword123!")
-	createTestPassword(t, testDB, testUser.ID, "testpassword")
+	testUser := createTestUser(t, dbm.Db, "testuser", "ValidPassword123!")
+	createTestPassword(t, dbm.Db, testUser.ID, "testpassword")
 
-	token, err := generateJWT(testUser)
+	token, err := jwtService.GenerateJWT(testUser)
 	if err != nil {
 		t.Fatalf("Failed to generate JWT: %v", err)
 	}
@@ -668,16 +695,16 @@ func TestGetPasswords(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
 
-	jwtMiddleware(getPasswords)(w, req)
+	jwt.JwtMiddleware(phm.GetPasswords)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
-	var response SuccessResponse
+	var response models.SuccessResponse
 	json.NewDecoder(w.Body).Decode(&response)
 
-	var passwordsResp GetPasswordsSuccess
+	var passwordsResp models.GetPasswordsSuccess
 	dataBytes, _ := json.Marshal(response.Data)
 	json.Unmarshal(dataBytes, &passwordsResp)
 
@@ -691,12 +718,17 @@ func TestGetPasswords(t *testing.T) {
 }
 
 func TestAddPassword(t *testing.T) {
-	setupTestConfig()
-	testDB := setupTestDB(t)
-	db = testDB
+	conf := setupTestConfig()
+	jwtService := setupJWTService(conf)
+	logger := logging.NewLogger(conf)
+	responseWriter := utils.NewResponseWriter(logger)
+	jwt := middleware.NewJWT(jwtService, responseWriter)
+	validator := setupValidator()
+	dbm := db.NewDbManager(conf)
+	phm := apihandlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
 
-	testUser := createTestUser(t, testDB, "testuser", "ValidPassword123!")
-	token, _ := generateJWT(testUser)
+	testUser := createTestUser(t, dbm.Db, "testuser", "ValidPassword123!")
+	token, _ := jwtService.GenerateJWT(testUser)
 
 	value := make([]byte, 256)
 	iv := make([]byte, 12)
@@ -705,13 +737,13 @@ func TestAddPassword(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		requestBody    AddPasswordRequest
+		requestBody    models.AddPasswordRequest
 		expectedStatus int
 		expectError    bool
 	}{
 		{
 			name: "Valid password addition",
-			requestBody: AddPasswordRequest{
+			requestBody: models.AddPasswordRequest{
 				Name:          "newpassword",
 				Value:         hex.EncodeToString(value),
 				IV:            hex.EncodeToString(iv),
@@ -724,7 +756,7 @@ func TestAddPassword(t *testing.T) {
 		},
 		{
 			name: "Duplicate password name",
-			requestBody: AddPasswordRequest{
+			requestBody: models.AddPasswordRequest{
 				Name:          "newpassword",
 				Value:         hex.EncodeToString(value),
 				IV:            hex.EncodeToString(iv),
@@ -737,7 +769,7 @@ func TestAddPassword(t *testing.T) {
 		},
 		{
 			name: "Invalid hex data",
-			requestBody: AddPasswordRequest{
+			requestBody: models.AddPasswordRequest{
 				Name:          "invalidhex",
 				Value:         "invalid-hex-data",
 				IV:            hex.EncodeToString(iv),
@@ -758,14 +790,14 @@ func TestAddPassword(t *testing.T) {
 			req.Header.Set("Authorization", "Bearer "+token)
 			w := httptest.NewRecorder()
 
-			jwtMiddleware(addPassword)(w, req)
+			jwt.JwtMiddleware(phm.AddPassword)(w, req)
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
 
 			if tt.expectError {
-				var errorResp ErrorResponse
+				var errorResp models.ErrorResponse
 				json.NewDecoder(w.Body).Decode(&errorResp)
 				if errorResp.Error == "" {
 					t.Error("Expected error response but got none")
@@ -777,11 +809,15 @@ func TestAddPassword(t *testing.T) {
 
 // Middleware tests
 func TestJWTMiddleware(t *testing.T) {
-	setupTestConfig()
+	conf := setupTestConfig()
+	jwtService := setupJWTService(conf)
+	logger := logging.NewLogger(conf)
+	responseWriter := utils.NewResponseWriter(logger)
+	jwt := middleware.NewJWT(jwtService, responseWriter)
 
-	testUser := User{Username: "testuser"}
+	testUser := models.User{Username: "testuser"}
 	testUser.ID = 1
-	validToken, _ := generateJWT(testUser)
+	validToken, _ := jwtService.GenerateJWT(testUser)
 
 	tests := []struct {
 		name           string
@@ -818,7 +854,7 @@ func TestJWTMiddleware(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			called := false
-			handler := jwtMiddleware(func(w http.ResponseWriter, r *http.Request) {
+			handler := jwt.JwtMiddleware(func(w http.ResponseWriter, r *http.Request) {
 				called = true
 				w.WriteHeader(http.StatusOK)
 			})
@@ -844,17 +880,17 @@ func TestJWTMiddleware(t *testing.T) {
 
 // Context middleware tests
 func TestContextMiddleware(t *testing.T) {
-	handler := contextMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Context().Value(ContextKeyRequestId) == nil {
+	handler := middleware.ContextMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Context().Value(constants.ContextKeyRequestId) == nil {
 			t.Error("Request ID not set in context")
 		}
-		if r.Context().Value(ContextKeyIPAddress) == nil {
+		if r.Context().Value(constants.ContextKeyIPAddress) == nil {
 			t.Error("IP address not set in context")
 		}
-		if r.Context().Value(ContextKeyPath) == nil {
+		if r.Context().Value(constants.ContextKeyPath) == nil {
 			t.Error("Path not set in context")
 		}
-		if r.Context().Value(ContextKeyMethod) == nil {
+		if r.Context().Value(constants.ContextKeyMethod) == nil {
 			t.Error("Method not set in context")
 		}
 		w.WriteHeader(http.StatusOK)
@@ -873,22 +909,24 @@ func TestContextMiddleware(t *testing.T) {
 
 // Utility function tests
 func TestWriteErrorResponse(t *testing.T) {
-	setupTestConfig()
+	conf := setupTestConfig()
+	logger := logging.NewLogger(conf)
+	responseWriter := utils.NewResponseWriter(logger)
 
 	w := httptest.NewRecorder()
 	ctx := context.Background()
 
-	writeErrorResponse(ctx, w, http.StatusBadRequest, ErrorInvalidJson, "Test error message")
+	responseWriter.WriteErrorResponse(ctx, w, http.StatusBadRequest, constants.ErrorInvalidJson, "Test error message")
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
 	}
 
-	var response ErrorResponse
+	var response models.ErrorResponse
 	json.NewDecoder(w.Body).Decode(&response)
 
-	if response.Error != ErrorInvalidJson {
-		t.Errorf("Expected error code %s, got %s", ErrorInvalidJson, response.Error)
+	if response.Error != constants.ErrorInvalidJson {
+		t.Errorf("Expected error code %s, got %s", constants.ErrorInvalidJson, response.Error)
 	}
 
 	if response.Message != "Test error message" {
@@ -897,7 +935,7 @@ func TestWriteErrorResponse(t *testing.T) {
 }
 
 func TestWriteSuccessResponse(t *testing.T) {
-	setupTestConfig()
+	setupTestServer()
 
 	w := httptest.NewRecorder()
 	ctx := context.Background()
@@ -919,7 +957,7 @@ func TestWriteSuccessResponse(t *testing.T) {
 
 // Integration test
 func TestUserPasswordFlow(t *testing.T) {
-	setupTestConfig()
+	setupTestServer()
 	testDB := setupTestDB(t)
 	db = testDB
 
@@ -1081,7 +1119,7 @@ func TestUserPasswordFlow(t *testing.T) {
 
 // Additional edge case tests
 func TestDeletePasswordNotFound(t *testing.T) {
-	setupTestConfig()
+	setupTestServer()
 	testDB := setupTestDB(t)
 	db = testDB
 
@@ -1106,7 +1144,7 @@ func TestDeletePasswordNotFound(t *testing.T) {
 }
 
 func TestUpdatePasswordNotFound(t *testing.T) {
-	setupTestConfig()
+	setupTestServer()
 	testDB := setupTestDB(t)
 	db = testDB
 
@@ -1144,7 +1182,7 @@ func TestUpdatePasswordNotFound(t *testing.T) {
 }
 
 func TestDeleteUserSuccess(t *testing.T) {
-	setupTestConfig()
+	setupTestServer()
 	testDB := setupTestDB(t)
 	db = testDB
 
@@ -1170,7 +1208,7 @@ func TestDeleteUserSuccess(t *testing.T) {
 }
 
 func TestUpdateUserSuccess(t *testing.T) {
-	setupTestConfig()
+	setupTestServer()
 	testDB := setupTestDB(t)
 	db = testDB
 
@@ -1208,7 +1246,7 @@ func TestUpdateUserSuccess(t *testing.T) {
 }
 
 func TestInvalidJSONRequests(t *testing.T) {
-	setupTestConfig()
+	setupTestServer()
 	testDB := setupTestDB(t)
 	db = testDB
 
@@ -1282,7 +1320,7 @@ func TestInvalidJSONRequests(t *testing.T) {
 }
 
 func TestPasswordIsolationBetweenUsers(t *testing.T) {
-	setupTestConfig()
+	setupTestServer()
 	testDB := setupTestDB(t)
 	db = testDB
 
@@ -1357,7 +1395,7 @@ func BenchmarkCheckPasswordHash(b *testing.B) {
 }
 
 func BenchmarkGenerateJWT(b *testing.B) {
-	setupTestConfig()
+	setupTestServer()
 	user := User{Username: "benchuser"}
 	user.ID = 1
 
@@ -1368,7 +1406,7 @@ func BenchmarkGenerateJWT(b *testing.B) {
 }
 
 func BenchmarkValidateJWT(b *testing.B) {
-	setupTestConfig()
+	setupTestServer()
 	user := User{Username: "benchuser"}
 	user.ID = 1
 	token, _ := generateJWT(user)

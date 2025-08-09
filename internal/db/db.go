@@ -18,9 +18,13 @@ func NewDbManager(config *config.Config) *DbManager {
 	Db, err := gorm.Open(sqlite.Open(config.DBPath), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
-
 	if err != nil {
 		panic(fmt.Sprintf("failed to connect to database: %s", config.DBPath))
+	}
+
+	err = Db.AutoMigrate(&models.User{}, &models.StoredPassword{})
+	if err != nil {
+		panic(fmt.Sprintf("Failed to migrate test database: %v", err))
 	}
 
 	dbmanager := &DbManager{

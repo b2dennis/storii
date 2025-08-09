@@ -23,7 +23,7 @@ func NewJWT(jwtService *auth.JWTService, responseWriter *utils.ResponseWriter) *
 	}
 }
 
-func extractJWTFromHeader(r *http.Request) (string, error) {
+func ExtractJWTFromHeader(r *http.Request) (string, error) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		return "", errors.New(constants.ErrorAuthHeaderMissing)
@@ -39,7 +39,7 @@ func extractJWTFromHeader(r *http.Request) (string, error) {
 
 func (j *JWT) JwtMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tokenString, err := extractJWTFromHeader(r)
+		tokenString, err := ExtractJWTFromHeader(r)
 		if err != nil {
 			j.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusUnauthorized, "Unauthorized: "+err.Error())
 			return
