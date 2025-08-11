@@ -77,10 +77,10 @@ func (phm *PasswordHandlerManager) getPasswords(w http.ResponseWriter, r *http.R
 	var storedPasswords []models.StoredPassword
 	phm.dbm.Db.Where("user_id = ?", uint(UserID)).Find(&storedPasswords)
 
-	responsePasswords := make([]models.ResponsePassword, len(storedPasswords))
+	responsePasswords := make([]models.S2CPassword, len(storedPasswords))
 
 	for i, storedPassword := range storedPasswords {
-		responsePasswords[i] = models.ResponsePassword{
+		responsePasswords[i] = models.S2CPassword{
 			Name:          storedPassword.Name,
 			Value:         hex.EncodeToString(storedPassword.Value),
 			IV:            hex.EncodeToString(storedPassword.IV),
@@ -90,7 +90,7 @@ func (phm *PasswordHandlerManager) getPasswords(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	response := models.GetPasswordsSuccess{
+	response := models.GetPasswordsS2C{
 		Passwords: responsePasswords,
 	}
 
@@ -108,7 +108,7 @@ func (phm *PasswordHandlerManager) addPassword(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	var addPasswordRequest models.AddPasswordRequest
+	var addPasswordRequest models.AddPasswordC2S
 	err = json.NewDecoder(r.Body).Decode(&addPasswordRequest)
 	if err != nil {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidJson)
@@ -168,8 +168,8 @@ func (phm *PasswordHandlerManager) addPassword(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	response := models.AddPasswordSuccess{
-		NewPassword: models.ResponsePassword{
+	response := models.AddPasswordS2C{
+		NewPassword: models.S2CPassword{
 			Name:          newPassword.Name,
 			Value:         hex.EncodeToString(newPassword.Value),
 			IV:            hex.EncodeToString(newPassword.IV),
@@ -193,7 +193,7 @@ func (phm *PasswordHandlerManager) deletePassword(w http.ResponseWriter, r *http
 		return
 	}
 
-	var deletePasswordRequest models.DeletePasswordRequest
+	var deletePasswordRequest models.DeletePasswordC2S
 	err = json.NewDecoder(r.Body).Decode(&deletePasswordRequest)
 	if err != nil {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidJson)
@@ -219,7 +219,7 @@ func (phm *PasswordHandlerManager) deletePassword(w http.ResponseWriter, r *http
 		return
 	}
 
-	response := models.DeletePasswordSuccess{
+	response := models.DeletePasswordS2C{
 		Name: existingPassword.Name,
 	}
 
@@ -237,7 +237,7 @@ func (phm *PasswordHandlerManager) updatePassword(w http.ResponseWriter, r *http
 		return
 	}
 
-	var updatePasswordRequest models.UpdatePasswordRequest
+	var updatePasswordRequest models.UpdatePasswordC2S
 	err = json.NewDecoder(r.Body).Decode(&updatePasswordRequest)
 	if err != nil {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidJson)
@@ -294,8 +294,8 @@ func (phm *PasswordHandlerManager) updatePassword(w http.ResponseWriter, r *http
 		return
 	}
 
-	response := models.UpdatePasswordSuccess{
-		NewPassword: models.ResponsePassword{
+	response := models.UpdatePasswordS2C{
+		NewPassword: models.S2CPassword{
 			Name:          existingPassword.Name,
 			Value:         hex.EncodeToString(existingPassword.Value),
 			IV:            hex.EncodeToString(existingPassword.IV),

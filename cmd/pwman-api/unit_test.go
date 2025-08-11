@@ -406,7 +406,7 @@ func TestValidatePasswordStrength(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			request := models.CreateUserRequest{
+			request := models.CreateUserC2S{
 				Username: "testuser",
 				Password: tt.password,
 			}
@@ -471,7 +471,7 @@ func TestValidateUsernameFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			request := models.CreateUserRequest{
+			request := models.CreateUserC2S{
 				Username: tt.username,
 				Password: "ValidPassword123!",
 			}
@@ -508,13 +508,13 @@ func TestCreateUser(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		requestBody    models.CreateUserRequest
+		requestBody    models.CreateUserC2S
 		expectedStatus int
 		expectError    bool
 	}{
 		{
 			name: "Valid user creation",
-			requestBody: models.CreateUserRequest{
+			requestBody: models.CreateUserC2S{
 				Username: "testuser",
 				Password: "ValidPassword123!",
 			},
@@ -523,7 +523,7 @@ func TestCreateUser(t *testing.T) {
 		},
 		{
 			name: "Duplicate username",
-			requestBody: models.CreateUserRequest{
+			requestBody: models.CreateUserC2S{
 				Username: "testuser",
 				Password: "ValidPassword123!",
 			},
@@ -532,7 +532,7 @@ func TestCreateUser(t *testing.T) {
 		},
 		{
 			name: "Invalid password",
-			requestBody: models.CreateUserRequest{
+			requestBody: models.CreateUserC2S{
 				Username: "testuser2",
 				Password: "weak",
 			},
@@ -541,7 +541,7 @@ func TestCreateUser(t *testing.T) {
 		},
 		{
 			name: "Invalid username",
-			requestBody: models.CreateUserRequest{
+			requestBody: models.CreateUserC2S{
 				Username: "123invalid",
 				Password: "ValidPassword123!",
 			},
@@ -564,13 +564,13 @@ func TestCreateUser(t *testing.T) {
 			}
 
 			if tt.expectError {
-				var errorResp models.ErrorResponse
+				var errorResp models.ErrorS2C
 				json.NewDecoder(w.Body).Decode(&errorResp)
 				if errorResp.Error == "" {
 					t.Error("Expected error response but got none")
 				}
 			} else {
-				var successResp models.SuccessResponse
+				var successResp models.SuccessS2C
 				json.NewDecoder(w.Body).Decode(&successResp)
 				if successResp.Message != "ok" {
 					t.Error("Expected success response")
@@ -594,13 +594,13 @@ func TestLoginUser(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		requestBody    models.LoginRequest
+		requestBody    models.LoginC2S
 		expectedStatus int
 		expectError    bool
 	}{
 		{
 			name: "Valid login",
-			requestBody: models.LoginRequest{
+			requestBody: models.LoginC2S{
 				Username: "testuser",
 				Password: "ValidPassword123!",
 			},
@@ -609,7 +609,7 @@ func TestLoginUser(t *testing.T) {
 		},
 		{
 			name: "Wrong password",
-			requestBody: models.LoginRequest{
+			requestBody: models.LoginC2S{
 				Username: "testuser",
 				Password: "WrongPassword123!",
 			},
@@ -618,7 +618,7 @@ func TestLoginUser(t *testing.T) {
 		},
 		{
 			name: "Non-existent user",
-			requestBody: models.LoginRequest{
+			requestBody: models.LoginC2S{
 				Username: "nonexistent",
 				Password: "ValidPassword123!",
 			},
@@ -641,14 +641,14 @@ func TestLoginUser(t *testing.T) {
 			}
 
 			if tt.expectError {
-				var errorResp models.ErrorResponse
+				var errorResp models.ErrorS2C
 				json.NewDecoder(w.Body).Decode(&errorResp)
 				if errorResp.Error == "" {
 					t.Error("Expected error response but got none")
 				}
 			} else {
-				var successResp models.SuccessResponse
-				var loginResp models.LoginSuccess
+				var successResp models.SuccessS2C
+				var loginResp models.LoginS2C
 				json.NewDecoder(w.Body).Decode(&successResp)
 
 				dataBytes, _ := json.Marshal(successResp.Data)
@@ -694,10 +694,10 @@ func TestGetPasswords(t *testing.T) {
 		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
-	var response models.SuccessResponse
+	var response models.SuccessS2C
 	json.NewDecoder(w.Body).Decode(&response)
 
-	var passwordsResp models.GetPasswordsSuccess
+	var passwordsResp models.GetPasswordsS2C
 	dataBytes, _ := json.Marshal(response.Data)
 	json.Unmarshal(dataBytes, &passwordsResp)
 
@@ -730,13 +730,13 @@ func TestAddPassword(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		requestBody    models.AddPasswordRequest
+		requestBody    models.AddPasswordC2S
 		expectedStatus int
 		expectError    bool
 	}{
 		{
 			name: "Valid password addition",
-			requestBody: models.AddPasswordRequest{
+			requestBody: models.AddPasswordC2S{
 				Name:          "newpassword",
 				Value:         hex.EncodeToString(value),
 				IV:            hex.EncodeToString(iv),
@@ -749,7 +749,7 @@ func TestAddPassword(t *testing.T) {
 		},
 		{
 			name: "Duplicate password name",
-			requestBody: models.AddPasswordRequest{
+			requestBody: models.AddPasswordC2S{
 				Name:          "newpassword",
 				Value:         hex.EncodeToString(value),
 				IV:            hex.EncodeToString(iv),
@@ -762,7 +762,7 @@ func TestAddPassword(t *testing.T) {
 		},
 		{
 			name: "Invalid hex data",
-			requestBody: models.AddPasswordRequest{
+			requestBody: models.AddPasswordC2S{
 				Name:          "invalidhex",
 				Value:         "invalid-hex-data",
 				IV:            hex.EncodeToString(iv),
@@ -790,7 +790,7 @@ func TestAddPassword(t *testing.T) {
 			}
 
 			if tt.expectError {
-				var errorResp models.ErrorResponse
+				var errorResp models.ErrorS2C
 				json.NewDecoder(w.Body).Decode(&errorResp)
 				if errorResp.Error == "" {
 					t.Error("Expected error response but got none")
@@ -915,7 +915,7 @@ func TestWriteErrorResponse(t *testing.T) {
 		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
 	}
 
-	var response models.ErrorResponse
+	var response models.ErrorS2C
 	json.NewDecoder(w.Body).Decode(&response)
 
 	if response.Error != constants.ErrorInvalidJson {
@@ -942,7 +942,7 @@ func TestWriteSuccessResponse(t *testing.T) {
 		t.Errorf("Expected status %d, got %d", http.StatusCreated, w.Code)
 	}
 
-	var response models.SuccessResponse
+	var response models.SuccessS2C
 	json.NewDecoder(w.Body).Decode(&response)
 
 	if response.Message != constants.ResponseSuccess {
@@ -963,7 +963,7 @@ func TestUserPasswordFlow(t *testing.T) {
 	uhm := apihandlers.NewUserHandlerManager(jwt, jwtService, logger, responseWriter, validator, dbm)
 
 	// 1. Create user
-	createUserReq := models.CreateUserRequest{
+	createUserReq := models.CreateUserC2S{
 		Username: "integrationuser",
 		Password: "IntegrationTest123!",
 	}
@@ -980,7 +980,7 @@ func TestUserPasswordFlow(t *testing.T) {
 	}
 
 	// 2. Login user
-	loginReq := models.LoginRequest{
+	loginReq := models.LoginC2S{
 		Username: "integrationuser",
 		Password: "IntegrationTest123!",
 	}
@@ -996,8 +996,8 @@ func TestUserPasswordFlow(t *testing.T) {
 		t.Fatalf("Failed to login user: status %d", w.Code)
 	}
 
-	var loginResponse models.SuccessResponse
-	var loginData models.LoginSuccess
+	var loginResponse models.SuccessS2C
+	var loginData models.LoginS2C
 	json.NewDecoder(w.Body).Decode(&loginResponse)
 	dataBytes, _ := json.Marshal(loginResponse.Data)
 	json.Unmarshal(dataBytes, &loginData)
@@ -1010,7 +1010,7 @@ func TestUserPasswordFlow(t *testing.T) {
 	authTag := make([]byte, 16)
 	salt := make([]byte, 16)
 
-	addPasswordReq := models.AddPasswordRequest{
+	addPasswordReq := models.AddPasswordC2S{
 		Name:          "testsite",
 		Value:         hex.EncodeToString(value),
 		IV:            hex.EncodeToString(iv),
@@ -1042,8 +1042,8 @@ func TestUserPasswordFlow(t *testing.T) {
 		t.Fatalf("Failed to get passwords: status %d", w.Code)
 	}
 
-	var getPasswordsResponse models.SuccessResponse
-	var passwordsData models.GetPasswordsSuccess
+	var getPasswordsResponse models.SuccessS2C
+	var passwordsData models.GetPasswordsS2C
 	json.NewDecoder(w.Body).Decode(&getPasswordsResponse)
 	dataBytes, _ = json.Marshal(getPasswordsResponse.Data)
 	json.Unmarshal(dataBytes, &passwordsData)
@@ -1057,8 +1057,8 @@ func TestUserPasswordFlow(t *testing.T) {
 	}
 
 	// 5. Update password
-	updatePasswordReq := models.UpdatePasswordRequest{
-		AddPasswordRequest: models.AddPasswordRequest{
+	updatePasswordReq := models.UpdatePasswordC2S{
+		AddPasswordC2S: models.AddPasswordC2S{
 			Name:          "testsite",
 			Value:         hex.EncodeToString(value),
 			IV:            hex.EncodeToString(iv),
@@ -1082,7 +1082,7 @@ func TestUserPasswordFlow(t *testing.T) {
 	}
 
 	// 6. Delete password
-	deletePasswordReq := models.DeletePasswordRequest{
+	deletePasswordReq := models.DeletePasswordC2S{
 		Name: "updated-testsite",
 	}
 
@@ -1132,7 +1132,7 @@ func TestDeletePasswordNotFound(t *testing.T) {
 	testUser := createTestUser(t, dbm.Db, "testuser", "ValidPassword123!")
 	token, _ := jwtService.GenerateJWT(testUser)
 
-	deletePasswordReq := models.DeletePasswordRequest{
+	deletePasswordReq := models.DeletePasswordC2S{
 		Name: "nonexistent",
 	}
 
@@ -1167,8 +1167,8 @@ func TestUpdatePasswordNotFound(t *testing.T) {
 	authTag := make([]byte, 16)
 	salt := make([]byte, 16)
 
-	updatePasswordReq := models.UpdatePasswordRequest{
-		AddPasswordRequest: models.AddPasswordRequest{
+	updatePasswordReq := models.UpdatePasswordC2S{
+		AddPasswordC2S: models.AddPasswordC2S{
 			Name:          "nonexistent",
 			Value:         hex.EncodeToString(value),
 			IV:            hex.EncodeToString(iv),
@@ -1236,7 +1236,7 @@ func TestUpdateUserSuccess(t *testing.T) {
 	testUser := createTestUser(t, dbm.Db, "testuser", "ValidPassword123!")
 	token, _ := jwtService.GenerateJWT(testUser)
 
-	updateUserReq := models.UpdateUserRequest{
+	updateUserReq := models.UpdateUserC2S{
 		Username: "updateduser",
 		Password: "UpdatedPassword123!",
 	}
@@ -1337,7 +1337,7 @@ func TestInvalidJSONRequests(t *testing.T) {
 				t.Errorf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
 			}
 
-			var errorResp models.ErrorResponse
+			var errorResp models.ErrorS2C
 			json.NewDecoder(w.Body).Decode(&errorResp)
 			if errorResp.Error != constants.ErrorInvalidJson {
 				t.Errorf("Expected error code %s, got %s", constants.ErrorInvalidJson, errorResp.Error)
@@ -1372,8 +1372,8 @@ func TestPasswordIsolationBetweenUsers(t *testing.T) {
 
 	jwt.JwtMiddleware(phm.GetPasswords)(w, req)
 
-	var response models.SuccessResponse
-	var passwordsData models.GetPasswordsSuccess
+	var response models.SuccessS2C
+	var passwordsData models.GetPasswordsS2C
 	json.NewDecoder(w.Body).Decode(&response)
 	dataBytes, _ := json.Marshal(response.Data)
 	json.Unmarshal(dataBytes, &passwordsData)

@@ -72,7 +72,7 @@ func (uhm *UserHandlerManager) RegisterUserHandlers(r *mux.Router) {
 func (uhm *UserHandlerManager) createUser(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	var createUserRequest models.CreateUserRequest
+	var createUserRequest models.CreateUserC2S
 	err := json.NewDecoder(r.Body).Decode(&createUserRequest)
 	if err != nil {
 		uhm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidJson)
@@ -109,7 +109,7 @@ func (uhm *UserHandlerManager) createUser(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	response := models.CreateUserSuccess{
+	response := models.CreateUserS2C{
 		ID:       newUser.ID,
 		Username: newUser.Username,
 	}
@@ -124,7 +124,7 @@ func (uhm *UserHandlerManager) createUser(w http.ResponseWriter, r *http.Request
 func (uhm *UserHandlerManager) loginUser(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	var loginRequest models.LoginRequest
+	var loginRequest models.LoginC2S
 	err := json.NewDecoder(r.Body).Decode(&loginRequest)
 	if err != nil {
 		uhm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidJson, "")
@@ -154,7 +154,7 @@ func (uhm *UserHandlerManager) loginUser(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	response := models.LoginSuccess{
+	response := models.LoginS2C{
 		Token:    token,
 		UserID:   user.ID,
 		Username: user.Username,
@@ -184,7 +184,7 @@ func (uhm *UserHandlerManager) deleteUser(w http.ResponseWriter, r *http.Request
 
 	result = uhm.dbm.Db.Delete(&existingUser)
 
-	response := models.DeleteUserSuccess{
+	response := models.DeleteUserS2C{
 		UserID: existingUser.ID,
 	}
 
@@ -202,7 +202,7 @@ func (uhm *UserHandlerManager) updateUser(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var updateUserRequest models.UpdateUserRequest
+	var updateUserRequest models.UpdateUserC2S
 	err = json.NewDecoder(r.Body).Decode(&updateUserRequest)
 	if err != nil {
 		uhm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidJson, "")
@@ -235,7 +235,7 @@ func (uhm *UserHandlerManager) updateUser(w http.ResponseWriter, r *http.Request
 		uhm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not update user DB entry")
 	}
 
-	response := models.UpdateUserSuccess{
+	response := models.UpdateUserS2C{
 		ID:       existingUser.ID,
 		Username: existingUser.Username,
 	}

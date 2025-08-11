@@ -30,7 +30,7 @@ func (r *ResponseWriter) WriteErrorResponse(ctx context.Context, w http.Response
 
 	r.logger.ErrorContext(ctx, message, "statusCode", strconv.Itoa(statusCode), "errorCode", errorCode)
 
-	json.NewEncoder(w).Encode(models.ErrorResponse{
+	json.NewEncoder(w).Encode(models.ErrorS2C{
 		Error:   errorCode,
 		Message: message,
 	})
@@ -46,7 +46,7 @@ func (r *ResponseWriter) WriteSuccessResponse(ctx context.Context, w http.Respon
 
 	r.logger.InfoContext(ctx, constants.ResponseSuccess, "statusCode", strconv.Itoa(statusCode))
 
-	json.NewEncoder(w).Encode(models.SuccessResponse{
+	json.NewEncoder(w).Encode(models.SuccessS2C{
 		Data:    data,
 		Message: constants.ResponseSuccess,
 	})

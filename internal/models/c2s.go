@@ -3,19 +3,19 @@ package models
 import "net/http"
 
 // Password max len of 72 because of bcrypt limitations
-type CreateUserRequest struct {
+type CreateUserC2S struct {
 	Username string `json:"username" validate:"required,min=4,max=32,username_format"`
 	Password string `json:"password" validate:"required,min=12,max=72,password_strength"`
 }
 
-type LoginRequest struct {
+type LoginC2S struct {
 	Username string `json:"username" validate:"required,min=4,max=32,username_format"`
 	Password string `json:"password" validate:"required,min=12,max=72,password_strength"`
 }
 
-type UpdateUserRequest = CreateUserRequest
+type UpdateUserC2S = CreateUserC2S
 
-type AddPasswordRequest struct {
+type AddPasswordC2S struct {
 	Name          string `json:"name" validate:"required,min=1,max=100,password_name"`
 	Value         string `json:"value" validate:"required,hexadecimal,len=512"`
 	IV            string `json:"iv" validate:"required,hexadecimal,len=24"`
@@ -24,12 +24,12 @@ type AddPasswordRequest struct {
 	AssociatedURL string `json:"associated_url" validate:"omitempty,url,max=2048"`
 }
 
-type DeletePasswordRequest struct {
+type DeletePasswordC2S struct {
 	Name string `json:"name" validate:"required,min=1,max=100,password_name"`
 }
 
-type UpdatePasswordRequest struct {
-	AddPasswordRequest
+type UpdatePasswordC2S struct {
+	AddPasswordC2S
 	NewName string `json:"new_name" validate:"required,min=1,max=100,password_name"`
 }
 
