@@ -1,10 +1,10 @@
 package auth
 
 import (
-	"b2dennis/pwman-api/internal/config"
-	"b2dennis/pwman-api/internal/constants"
-	"b2dennis/pwman-api/internal/models"
 	"errors"
+	"github.com/b2dennis/stori/internal/config"
+	"github.com/b2dennis/stori/internal/constants"
+	"github.com/b2dennis/stori/internal/models"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"

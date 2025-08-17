@@ -1,9 +1,9 @@
 package db
 
 import (
-	"b2dennis/pwman-api/internal/config"
-	"b2dennis/pwman-api/internal/models"
 	"fmt"
+	"github.com/b2dennis/stori/internal/config"
+	"github.com/b2dennis/stori/internal/models"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"

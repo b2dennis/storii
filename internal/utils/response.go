@@ -1,10 +1,10 @@
 package utils
 
 import (
-	"b2dennis/pwman-api/internal/constants"
-	"b2dennis/pwman-api/internal/models"
 	"context"
 	"encoding/json"
+	"github.com/b2dennis/stori/internal/constants"
+	"github.com/b2dennis/stori/internal/models"
 	"log/slog"
 	"net/http"
 	"strconv"

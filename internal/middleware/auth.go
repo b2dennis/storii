@@ -1,11 +1,11 @@
 package middleware
 
 import (
-	"b2dennis/pwman-api/internal/auth"
-	"b2dennis/pwman-api/internal/constants"
-	"b2dennis/pwman-api/internal/utils"
 	"context"
 	"errors"
+	"github.com/b2dennis/stori/internal/auth"
+	"github.com/b2dennis/stori/internal/constants"
+	"github.com/b2dennis/stori/internal/utils"
 	"net/http"
 	"strconv"
 	"strings"

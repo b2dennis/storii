@@ -1,7 +1,7 @@
-APP_API_NAME := "pwman-api"
-APP_CLI_NAME := "pwman-cli"
-API_CMD_DIR := "./cmd/pwman-api"
-CLI_CMD_DIR := "./cmd/pwman-cli"
+APP_API_NAME := "stori-api"
+APP_CLI_NAME := "stori-cli"
+API_CMD_DIR := "./cmd/stori-api"
+CLI_CMD_DIR := "./cmd/stori-cli"
 BUILD_DIR := "./build/bin"
 FILE_EXTENSION := if os() == "windows" { ".exe" } else { "" }
 

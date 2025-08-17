@@ -1,6 +1,6 @@
 package main
 
-import "b2dennis/pwman-api/internal/server"
+import "github.com/b2dennis/stori/internal/server"
 
 func main() {
 	server := server.NewServer()

@@ -1,8 +1,8 @@
 package models
 
 import (
-	"b2dennis/pwman-api/internal/constants"
 	"context"
+	"github.com/b2dennis/stori/internal/constants"
 	"log/slog"
 )
 

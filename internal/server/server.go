@@ -1,14 +1,14 @@
 package server
 
 import (
-	"b2dennis/pwman-api/internal/apihandlers"
-	"b2dennis/pwman-api/internal/auth"
-	"b2dennis/pwman-api/internal/config"
-	"b2dennis/pwman-api/internal/db"
-	"b2dennis/pwman-api/internal/logging"
-	"b2dennis/pwman-api/internal/middleware"
-	"b2dennis/pwman-api/internal/utils"
-	"b2dennis/pwman-api/internal/validation"
+	"github.com/b2dennis/stori/internal/apihandlers"
+	"github.com/b2dennis/stori/internal/auth"
+	"github.com/b2dennis/stori/internal/config"
+	"github.com/b2dennis/stori/internal/db"
+	"github.com/b2dennis/stori/internal/logging"
+	"github.com/b2dennis/stori/internal/middleware"
+	"github.com/b2dennis/stori/internal/utils"
+	"github.com/b2dennis/stori/internal/validation"
 	"log/slog"
 	"net/http"
 

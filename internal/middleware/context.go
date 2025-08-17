@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	"b2dennis/pwman-api/internal/constants"
 	"context"
+	"github.com/b2dennis/stori/internal/constants"
 	"net/http"
 
 	"github.com/google/uuid"

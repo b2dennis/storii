@@ -1,8 +1,8 @@
 package config
 
 import (
-	"b2dennis/pwman-api/internal/constants"
 	"fmt"
+	"github.com/b2dennis/stori/internal/constants"
 	"io"
 	"os"
 	"strconv"

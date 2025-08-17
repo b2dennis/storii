@@ -1,14 +1,14 @@
 package apihandlers
 
 import (
-	"b2dennis/pwman-api/internal/constants"
-	"b2dennis/pwman-api/internal/db"
-	"b2dennis/pwman-api/internal/middleware"
-	"b2dennis/pwman-api/internal/models"
-	"b2dennis/pwman-api/internal/utils"
-	"b2dennis/pwman-api/internal/validation"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/b2dennis/stori/internal/constants"
+	"github.com/b2dennis/stori/internal/db"
+	"github.com/b2dennis/stori/internal/middleware"
+	"github.com/b2dennis/stori/internal/models"
+	"github.com/b2dennis/stori/internal/utils"
+	"github.com/b2dennis/stori/internal/validation"
 	"log/slog"
 	"net/http"
 	"strconv"

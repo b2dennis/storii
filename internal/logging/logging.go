@@ -1,8 +1,8 @@
 package logging
 
 import (
-	"b2dennis/pwman-api/internal/config"
-	"b2dennis/pwman-api/internal/models"
+	"github.com/b2dennis/stori/internal/config"
+	"github.com/b2dennis/stori/internal/models"
 	"log/slog"
 )
 

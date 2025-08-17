@@ -1,4 +1,4 @@
-module b2dennis/pwman-api
+module github.com/b2dennis/stori
 
 go 1.24.5
 

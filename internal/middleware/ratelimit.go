@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	"b2dennis/pwman-api/internal/constants"
-	"b2dennis/pwman-api/internal/utils"
+	"github.com/b2dennis/stori/internal/constants"
+	"github.com/b2dennis/stori/internal/utils"
 	"log/slog"
 	"net/http"
 
