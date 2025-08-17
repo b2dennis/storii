@@ -37,5 +37,5 @@ func (uhm *UtilHandlerManager) RegisterUtilHandlers(r *mux.Router) {
 }
 
 func Ping(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("200 OK"))
+	w.Write([]byte(constants.PingRouteSuccessResponse))
 }

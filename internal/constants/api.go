@@ -34,6 +34,8 @@ const (
 	UtilRoutePing = "/ping"
 )
 
+const PingRouteSuccessResponse = "200 OK"
+
 // Middleware Headers
 const (
 	AuthHeaderUserID   = "X-User-ID"
