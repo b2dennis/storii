@@ -504,7 +504,7 @@ func TestCreateUser(t *testing.T) {
 	jwt := middleware.NewJWT(jwtService, responseWriter)
 	validator := setupValidator()
 	dbm := db.NewDbManager(conf)
-	uhm := apihandlers.NewUserHandlerManager(jwt, jwtService, logger, responseWriter, validator, dbm)
+	uhm := handlers.NewUserHandlerManager(jwt, jwtService, logger, responseWriter, validator, dbm)
 
 	tests := []struct {
 		name           string
@@ -588,7 +588,7 @@ func TestLoginUser(t *testing.T) {
 	jwt := middleware.NewJWT(jwtService, responseWriter)
 	validator := setupValidator()
 	dbm := db.NewDbManager(conf)
-	uhm := apihandlers.NewUserHandlerManager(jwt, jwtService, logger, responseWriter, validator, dbm)
+	uhm := handlers.NewUserHandlerManager(jwt, jwtService, logger, responseWriter, validator, dbm)
 
 	testUser := createTestUser(t, dbm.Db, "testuser", "ValidPassword123!")
 
@@ -674,7 +674,7 @@ func TestGetPasswords(t *testing.T) {
 	jwt := middleware.NewJWT(jwtService, responseWriter)
 	validator := setupValidator()
 	dbm := db.NewDbManager(conf)
-	phm := apihandlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
+	phm := handlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
 
 	testUser := createTestUser(t, dbm.Db, "testuser", "ValidPassword123!")
 	createTestPassword(t, dbm.Db, testUser.ID, "testpassword")
@@ -718,7 +718,7 @@ func TestAddPassword(t *testing.T) {
 	jwt := middleware.NewJWT(jwtService, responseWriter)
 	validator := setupValidator()
 	dbm := db.NewDbManager(conf)
-	phm := apihandlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
+	phm := handlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
 
 	testUser := createTestUser(t, dbm.Db, "testuser", "ValidPassword123!")
 	token, _ := jwtService.GenerateJWT(testUser)
@@ -959,8 +959,8 @@ func TestUserPasswordFlow(t *testing.T) {
 	jwt := middleware.NewJWT(jwtService, responseWriter)
 	validator := setupValidator()
 	dbm := db.NewDbManager(conf)
-	phm := apihandlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
-	uhm := apihandlers.NewUserHandlerManager(jwt, jwtService, logger, responseWriter, validator, dbm)
+	phm := handlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
+	uhm := handlers.NewUserHandlerManager(jwt, jwtService, logger, responseWriter, validator, dbm)
 
 	// 1. Create user
 	createUserReq := models.CreateUserC2S{
@@ -1127,7 +1127,7 @@ func TestDeletePasswordNotFound(t *testing.T) {
 	jwt := middleware.NewJWT(jwtService, responseWriter)
 	validator := setupValidator()
 	dbm := db.NewDbManager(conf)
-	phm := apihandlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
+	phm := handlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
 
 	testUser := createTestUser(t, dbm.Db, "testuser", "ValidPassword123!")
 	token, _ := jwtService.GenerateJWT(testUser)
@@ -1157,7 +1157,7 @@ func TestUpdatePasswordNotFound(t *testing.T) {
 	jwt := middleware.NewJWT(jwtService, responseWriter)
 	validator := setupValidator()
 	dbm := db.NewDbManager(conf)
-	phm := apihandlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
+	phm := handlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
 
 	testUser := createTestUser(t, dbm.Db, "testuser", "ValidPassword123!")
 	token, _ := jwtService.GenerateJWT(testUser)
@@ -1200,7 +1200,7 @@ func TestDeleteUserSuccess(t *testing.T) {
 	jwt := middleware.NewJWT(jwtService, responseWriter)
 	validator := setupValidator()
 	dbm := db.NewDbManager(conf)
-	uhm := apihandlers.NewUserHandlerManager(jwt, jwtService, logger, responseWriter, validator, dbm)
+	uhm := handlers.NewUserHandlerManager(jwt, jwtService, logger, responseWriter, validator, dbm)
 
 	testUser := createTestUser(t, dbm.Db, "testuser", "ValidPassword123!")
 	token, _ := jwtService.GenerateJWT(testUser)
@@ -1231,7 +1231,7 @@ func TestUpdateUserSuccess(t *testing.T) {
 	jwt := middleware.NewJWT(jwtService, responseWriter)
 	validator := setupValidator()
 	dbm := db.NewDbManager(conf)
-	uhm := apihandlers.NewUserHandlerManager(jwt, jwtService, logger, responseWriter, validator, dbm)
+	uhm := handlers.NewUserHandlerManager(jwt, jwtService, logger, responseWriter, validator, dbm)
 
 	testUser := createTestUser(t, dbm.Db, "testuser", "ValidPassword123!")
 	token, _ := jwtService.GenerateJWT(testUser)
@@ -1274,8 +1274,8 @@ func TestInvalidJSONRequests(t *testing.T) {
 	jwt := middleware.NewJWT(jwtService, responseWriter)
 	validator := setupValidator()
 	dbm := db.NewDbManager(conf)
-	phm := apihandlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
-	uhm := apihandlers.NewUserHandlerManager(jwt, jwtService, logger, responseWriter, validator, dbm)
+	phm := handlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
+	uhm := handlers.NewUserHandlerManager(jwt, jwtService, logger, responseWriter, validator, dbm)
 
 	testUser := createTestUser(t, dbm.Db, "testuser", "ValidPassword123!")
 	token, _ := jwtService.GenerateJWT(testUser)
@@ -1354,7 +1354,7 @@ func TestPasswordIsolationBetweenUsers(t *testing.T) {
 	jwt := middleware.NewJWT(jwtService, responseWriter)
 	validator := setupValidator()
 	dbm := db.NewDbManager(conf)
-	phm := apihandlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
+	phm := handlers.NewPasswordHandlerManager(jwt, logger, responseWriter, validator, dbm)
 
 	// Create two users
 	user1 := createTestUser(t, dbm.Db, "user1", "ValidPassword123!")

@@ -1,10 +1,10 @@
 package server
 
 import (
-	"github.com/b2dennis/storii/internal/apihandlers"
 	"github.com/b2dennis/storii/internal/auth"
 	"github.com/b2dennis/storii/internal/config"
 	"github.com/b2dennis/storii/internal/db"
+	"github.com/b2dennis/storii/internal/handlers"
 	"github.com/b2dennis/storii/internal/logging"
 	"github.com/b2dennis/storii/internal/middleware"
 	"github.com/b2dennis/storii/internal/utils"
@@ -12,7 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/gorilla/handlers"
+	ghandlers "github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 )
@@ -67,18 +67,18 @@ func NewServer() Server {
 func (s *Server) Run() {
 	s.registerHandlers()
 
-	http.ListenAndServe(s.config.Address, handlers.CORS(
-		handlers.AllowCredentials(),
-		handlers.AllowedHeaders([]string{"GET", "POST", "PUT", "DELETE"}),
-		handlers.AllowedHeaders([]string{"Authorization"}),
-		handlers.AllowedOrigins([]string{"*"}),
+	http.ListenAndServe(s.config.Address, ghandlers.CORS(
+		ghandlers.AllowCredentials(),
+		ghandlers.AllowedHeaders([]string{"GET", "POST", "PUT", "DELETE"}),
+		ghandlers.AllowedHeaders([]string{"Authorization"}),
+		ghandlers.AllowedOrigins([]string{"*"}),
 	)(s.router))
 }
 
 func (s *Server) registerHandlers() {
-	passwordHandlerManager := apihandlers.NewPasswordHandlerManager(s.jwt, s.logger, s.responseWriter, s.validator, s.dbm)
+	passwordHandlerManager := handlers.NewPasswordHandlerManager(s.jwt, s.logger, s.responseWriter, s.validator, s.dbm)
 	passwordHandlerManager.RegisterPasswordHandlers(s.router)
 
-	userHandlerManager := apihandlers.NewUserHandlerManager(s.jwt, s.jwtService, s.logger, s.responseWriter, s.validator, s.dbm)
+	userHandlerManager := handlers.NewUserHandlerManager(s.jwt, s.jwtService, s.logger, s.responseWriter, s.validator, s.dbm)
 	userHandlerManager.RegisterUserHandlers(s.router)
 }
