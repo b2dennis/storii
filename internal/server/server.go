@@ -81,4 +81,7 @@ func (s *Server) registerHandlers() {
 
 	userHandlerManager := handlers.NewUserHandlerManager(s.jwt, s.jwtService, s.logger, s.responseWriter, s.validator, s.dbm)
 	userHandlerManager.RegisterUserHandlers(s.router)
+
+	utilHandlerManager := handlers.NewUtilHandlerManager(s.logger)
+	utilHandlerManager.RegisterUtilHandlers(s.router)
 }

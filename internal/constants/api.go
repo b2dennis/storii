@@ -10,6 +10,7 @@ const (
 const (
 	RouteUser     = "/user"
 	RoutePassword = "/password"
+	RouteUtil     = "/util"
 )
 
 // User Routes
@@ -26,6 +27,11 @@ const (
 	PasswordRouteAdd    = "/create"
 	PasswordRouteDelete = "/delete"
 	PasswordRouteUpdate = "/update"
+)
+
+// Util Routes
+const (
+	UtilRoutePing = "/ping"
 )
 
 // Middleware Headers
