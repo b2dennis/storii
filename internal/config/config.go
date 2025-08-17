@@ -2,7 +2,7 @@ package config
 
 import (
 	"fmt"
-	"github.com/b2dennis/stori/internal/constants"
+	"github.com/b2dennis/storii/internal/constants"
 	"io"
 	"os"
 	"strconv"
@@ -36,12 +36,12 @@ func LoadConfig() *Config {
 	}
 }
 
-func getEnv(key, default_value string) string {
+func getEnv(key, defaultValue string) string {
 	value := os.Getenv(key)
 	if value != "" {
 		return value
 	}
-	return default_value
+	return defaultValue
 }
 
 type Config struct {

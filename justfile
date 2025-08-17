@@ -1,11 +1,15 @@
-APP_API_NAME := "stori-api"
-APP_CLI_NAME := "stori-cli"
-API_CMD_DIR := "./cmd/stori-api"
-CLI_CMD_DIR := "./cmd/stori-cli"
+APP_API_NAME := "storii-api"
+APP_CLI_NAME := "storii-cli"
+API_CMD_DIR := "./cmd/storii-api"
+CLI_CMD_DIR := "./cmd/storii-cli"
 BUILD_DIR := "./build/bin"
 FILE_EXTENSION := if os() == "windows" { ".exe" } else { "" }
 
 default: build
+
+dev: build-api
+  @echo "==> Starting dev API server at localhost:9999"
+  @DBPATH=":memory:" {{BUILD_DIR}}/{{APP_API_NAME}}{{FILE_EXTENSION}}
 
 build-api:
   @echo "==> Building API server binary"

@@ -3,9 +3,9 @@ package middleware
 import (
 	"context"
 	"errors"
-	"github.com/b2dennis/stori/internal/auth"
-	"github.com/b2dennis/stori/internal/constants"
-	"github.com/b2dennis/stori/internal/utils"
+	"github.com/b2dennis/storii/internal/auth"
+	"github.com/b2dennis/storii/internal/constants"
+	"github.com/b2dennis/storii/internal/utils"
 	"net/http"
 	"strconv"
 	"strings"

@@ -1,14 +1,14 @@
 package server
 
 import (
-	"github.com/b2dennis/stori/internal/apihandlers"
-	"github.com/b2dennis/stori/internal/auth"
-	"github.com/b2dennis/stori/internal/config"
-	"github.com/b2dennis/stori/internal/db"
-	"github.com/b2dennis/stori/internal/logging"
-	"github.com/b2dennis/stori/internal/middleware"
-	"github.com/b2dennis/stori/internal/utils"
-	"github.com/b2dennis/stori/internal/validation"
+	"github.com/b2dennis/storii/internal/apihandlers"
+	"github.com/b2dennis/storii/internal/auth"
+	"github.com/b2dennis/storii/internal/config"
+	"github.com/b2dennis/storii/internal/db"
+	"github.com/b2dennis/storii/internal/logging"
+	"github.com/b2dennis/storii/internal/middleware"
+	"github.com/b2dennis/storii/internal/utils"
+	"github.com/b2dennis/storii/internal/validation"
 	"log/slog"
 	"net/http"
 

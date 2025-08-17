@@ -2,8 +2,8 @@ package db
 
 import (
 	"fmt"
-	"github.com/b2dennis/stori/internal/config"
-	"github.com/b2dennis/stori/internal/models"
+	"github.com/b2dennis/storii/internal/config"
+	"github.com/b2dennis/storii/internal/models"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"

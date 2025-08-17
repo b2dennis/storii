@@ -1,4 +1,4 @@
-module github.com/b2dennis/stori
+module github.com/b2dennis/storii
 
 go 1.24.5
 

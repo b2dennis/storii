@@ -2,9 +2,9 @@ package auth
 
 import (
 	"errors"
-	"github.com/b2dennis/stori/internal/config"
-	"github.com/b2dennis/stori/internal/constants"
-	"github.com/b2dennis/stori/internal/models"
+	"github.com/b2dennis/storii/internal/config"
+	"github.com/b2dennis/storii/internal/constants"
+	"github.com/b2dennis/storii/internal/models"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"

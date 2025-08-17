@@ -3,8 +3,8 @@ package utils
 import (
 	"context"
 	"encoding/json"
-	"github.com/b2dennis/stori/internal/constants"
-	"github.com/b2dennis/stori/internal/models"
+	"github.com/b2dennis/storii/internal/constants"
+	"github.com/b2dennis/storii/internal/models"
 	"log/slog"
 	"net/http"
 	"strconv"

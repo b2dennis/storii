@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"github.com/b2dennis/stori/internal/constants"
+	"github.com/b2dennis/storii/internal/constants"
 	"log/slog"
 	"net/http"
 )

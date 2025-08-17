@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"context"
-	"github.com/b2dennis/stori/internal/constants"
+	"github.com/b2dennis/storii/internal/constants"
 	"net/http"
 
 	"github.com/google/uuid"

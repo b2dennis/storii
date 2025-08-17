@@ -2,7 +2,7 @@ package models
 
 import (
 	"context"
-	"github.com/b2dennis/stori/internal/constants"
+	"github.com/b2dennis/storii/internal/constants"
 	"log/slog"
 )
 

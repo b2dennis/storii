@@ -1,8 +1,8 @@
 package logging
 
 import (
-	"github.com/b2dennis/stori/internal/config"
-	"github.com/b2dennis/stori/internal/models"
+	"github.com/b2dennis/storii/internal/config"
+	"github.com/b2dennis/storii/internal/models"
 	"log/slog"
 )
 
