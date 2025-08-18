@@ -30,7 +30,7 @@ require (
 	github.com/stretchr/testify v1.10.0 // indirect
 	golang.org/x/net v0.41.0 // indirect
 	golang.org/x/sys v0.35.0 // indirect
-	golang.org/x/term v0.34.0 // indirect
+	golang.org/x/term v0.34.0
 	golang.org/x/text v0.27.0 // indirect
 	modernc.org/libc v1.22.5 // indirect
 	modernc.org/mathutil v1.5.0 // indirect

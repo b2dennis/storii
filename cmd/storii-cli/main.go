@@ -48,20 +48,23 @@ func main() {
 	}
 
 	var err error
+	var conf Config
 
 	if os.Args[1] != "init" {
-		_, err = loadConfig()
+		conf, err = loadConfig()
 	}
 
 	if os.Args[1] == "init" || err != nil {
-		_, err = initConfig()
+		conf, err = initConfig()
 		if err != nil {
 			fmt.Printf("Failed to initialize configuration: %v\n", err)
 			return
 		}
 	}
 
-	fmt.Println("Initialized successfully")
+	jsonData, _ := json.Marshal(conf)
+	file, err := os.Create(configFile)
+	file.Write(jsonData)
 }
 
 func printUsage() {
@@ -91,7 +94,6 @@ func loadConfig() (Config, error) {
 
 func initConfig() (Config, error) {
 	scanner := bufio.NewScanner(os.Stdin)
-	isRemoteValid := false
 	var remote string
 
 	for {
@@ -99,8 +101,7 @@ func initConfig() (Config, error) {
 		scanner.Scan()
 		remote = scanner.Text()
 
-		isRemoteValid = checkRemoteValid(remote)
-		if isRemoteValid {
+		if isRemoteValid(remote) {
 			break
 		}
 		fmt.Printf("Remote %s is invalid\n", remote)
@@ -113,54 +114,28 @@ func initConfig() (Config, error) {
 
 	var username string
 	var password string
+	var token string
+	var err error
 
 	if hasAccount {
-		fmt.Println("Logging in")
+		username, password, token, err = login(remote, scanner)
 	} else {
-		fmt.Println("Registering")
+		username, password, token, err = register(remote, scanner)
 	}
 
-	for {
-		fmt.Printf("Username: ")
-		scanner.Scan()
-		username = scanner.Text()
-
-		fmt.Printf("Password: ")
-		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
-		fmt.Print("\n")
-		if err != nil {
-			fmt.Printf("Failed to read password\n")
-			return Config{}, err
-		}
-		password = string(bytePassword)
-
-		var token string
-		if hasAccount {
-			token, err = login(remote, username, password)
-		} else {
-			token, err = register(remote, username, password)
-		}
-
-		fmt.Println(token)
-
-		if err != nil {
-			fmt.Printf("Error occured: %v", err)
-			return Config{}, err
-		}
-
-		if token != "" {
-			break
-		}
+	if err != nil {
+		return Config{}, err
 	}
 
 	return Config{
 		APIAddress: remote,
 		Username:   username,
 		Password:   password,
+		Token:      token,
 	}, nil
 }
 
-func checkRemoteValid(remote string) bool {
+func isRemoteValid(remote string) bool {
 	req, err := http.NewRequest(http.MethodGet, remote+constants.RouteUtil+constants.UtilRoutePing, bytes.NewReader([]byte{}))
 	if err != nil {
 		fmt.Println("Failed to validate remote: Couldn't construct request")
@@ -177,7 +152,7 @@ func checkRemoteValid(remote string) bool {
 	return string(body) == constants.PingRouteSuccessResponse
 }
 
-func login(remote, username, password string) (string, error) {
+func loginRequest(remote, username, password string) ([]byte, error) {
 	requestData, _ := json.Marshal(models.LoginC2S{
 		Username: username,
 		Password: password,
@@ -186,29 +161,46 @@ func login(remote, username, password string) (string, error) {
 	req, err := http.NewRequest(http.MethodPost, remote+constants.RouteUser+constants.UserRouteLogin, bytes.NewReader(requestData))
 	if err != nil {
 		fmt.Println("Failed to login: Couldn't construct request")
-		return "", errors.New("login_request_construction_failed")
+		return []byte{}, errors.New("login_request_construction_failed")
 	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		fmt.Println("Failed to login: Request to remote failed")
-		return "", errors.New("login_request_failed")
+		return []byte{}, errors.New("login_request_failed")
 	}
-
-	responseData, err := io.ReadAll(res.Body)
-	var loginRes models.LoginS2C
-	err = json.Unmarshal(responseData, &loginRes)
-
-	// wrong password returns different type of response -> fails to unmarshal
-	if err != nil {
-		fmt.Println("Failed to login: Check your username and password")
-		return "", nil
-	}
-
-	return loginRes.Token, nil
+	return io.ReadAll(res.Body)
 }
 
-func register(remote, username, password string) (string, error) {
+func login(remote string, scanner *bufio.Scanner) (string, string, string, error) {
+	var username string
+	var password string
+	for {
+		fmt.Print("Username: ")
+		scanner.Scan()
+		username = scanner.Text()
+
+		fmt.Print("Password: ")
+		passwordByte, err := term.ReadPassword(int(syscall.Stdin))
+		password = string(passwordByte)
+		fmt.Print("\n")
+
+		responseData, err := loginRequest(remote, username, password)
+		var loginRes models.LoginS2C
+		err = json.Unmarshal(responseData, &loginRes)
+
+		// wrong password returns error response -> fails to unmarshal
+		if err != nil {
+			var errorRes models.ErrorS2C
+			err = json.Unmarshal(responseData, &errorRes)
+			fmt.Printf("Failed to login: %s, %s", errorRes.Message, errorRes.Error)
+			continue
+		}
+		return username, password, loginRes.Token, nil
+	}
+}
+
+func registerRequest(remote, username, password string) ([]byte, error) {
 	requestData, _ := json.Marshal(models.CreateUserC2S{
 		Username: username,
 		Password: password,
@@ -217,24 +209,53 @@ func register(remote, username, password string) (string, error) {
 	req, err := http.NewRequest(http.MethodPost, remote+constants.RouteUser+constants.UserRouteRegister, bytes.NewReader(requestData))
 	if err != nil {
 		fmt.Println("Failed to register: Couldn't construct request")
-		return "", errors.New("register_request_construction_failed")
+		return []byte{}, errors.New("register_request_construction_failed")
 	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		fmt.Println("Failed to register: Request to remote failed")
-		return "", errors.New("register_request_failed")
+		return []byte{}, errors.New("register_request_failed")
 	}
+	return io.ReadAll(res.Body)
+}
 
-	responseData, err := io.ReadAll(res.Body)
-	var registerRes models.CreateUserS2C
-	err = json.Unmarshal(responseData, &registerRes)
+func register(remote string, scanner *bufio.Scanner) (string, string, string, error) {
+	var username string
+	var password string
+	for {
+		fmt.Print("Username: ")
+		scanner.Scan()
+		username = scanner.Text()
 
-	// on error different struct is returned -> error
-	if err != nil {
-		fmt.Println("Failed to register: Username taken or password invalid")
-		return "", nil
+		fmt.Print("Password: ")
+		passwordByte, err := term.ReadPassword(int(syscall.Stdin))
+		password = string(passwordByte)
+		fmt.Print("\n")
+
+		responseData, err := registerRequest(remote, username, password)
+		var registerRes models.CreateUserS2C
+		err = json.Unmarshal(responseData, &registerRes)
+
+		// wrong password returns error response -> fails to unmarshal
+		if err != nil {
+			var errorRes models.ErrorS2C
+			err = json.Unmarshal(responseData, &errorRes)
+			fmt.Printf("Failed to register: %s, %s", errorRes.Message, errorRes.Error)
+			continue
+		}
+
+		loginData, err := loginRequest(remote, username, password)
+		var loginRes models.LoginS2C
+		err = json.Unmarshal(responseData, &registerRes)
+
+		if err != nil {
+			var errorRes models.ErrorS2C
+			err = json.Unmarshal(loginData, &errorRes)
+			fmt.Printf("Failed to login: %s, %s", errorRes.Message, errorRes.Error)
+			continue
+		}
+
+		return username, password, loginRes.Token, nil
 	}
-
-	return login(remote, username, password)
 }
