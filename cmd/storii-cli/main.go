@@ -2,19 +2,14 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strings"
 	"syscall"
 
 	"github.com/b2dennis/storii/internal/client"
 	"github.com/b2dennis/storii/internal/config"
-	"github.com/b2dennis/storii/internal/constants"
 	"github.com/b2dennis/storii/internal/models"
 	"golang.org/x/term"
 )
@@ -37,6 +32,8 @@ func main() {
 	//  storii set {name} {password} -> store password with given name, print confirmation
 	//  storii del {name} -> delete password with given name, print confirmation
 	//  storii gen {name} -> store generated password with given name, print password
+	//  storii get {name} -> get password from name
+	//  storii lst -> list all passwords
 	if len(os.Args) < 2 {
 		printUsage()
 		return
@@ -55,11 +52,29 @@ func main() {
 			fmt.Printf("Failed to initialize configuration: %v\n", err)
 			return
 		}
+		jsonData, _ := json.Marshal(conf)
+		file, err := os.Create(configFile)
+		if err != nil {
+			fmt.Printf("Failed to create config file: %v\n", err)
+			return
+		}
+		file.Write(jsonData)
+		return
 	}
-
-	jsonData, _ := json.Marshal(conf)
-	file, err := os.Create(configFile)
-	file.Write(jsonData)
+	switch strings.ToLower(os.Args[1]) {
+	case "set":
+		client.SetPasswordRequest(conf.Remote, os.Args[2], os.Args[3], conf.Password)
+	case "del":
+		client.DeletePasswordRequest(os.Args[2])
+	case "gen":
+		client.GeneratePasswordRequest(os.Args[2])
+	case "get":
+		client.GetPasswordRequest(os.Args[2])
+	case "lst":
+		client.ListPasswordsRequest()
+	default:
+		printUsage()
+	}
 }
 
 func printUsage() {
@@ -92,13 +107,12 @@ func initConfig() (config.ClientConfig, error) {
 
 	var username string
 	var password string
-	var token string
 	var err error
 
 	if hasAccount {
-		username, password, token, err = login(remote, scanner)
+		username, password, err = login(remote, scanner)
 	} else {
-		username, password, token, err = register(remote, scanner)
+		username, password, err = register(remote, scanner)
 	}
 
 	if err != nil {
@@ -106,14 +120,13 @@ func initConfig() (config.ClientConfig, error) {
 	}
 
 	return config.ClientConfig{
-		APIAddress: remote,
-		Username:   username,
-		Password:   password,
-		Token:      token,
+		Remote:   remote,
+		Username: username,
+		Password: password,
 	}, nil
 }
 
-func login(remote string, scanner *bufio.Scanner) (string, string, string, error) {
+func login(remote string, scanner *bufio.Scanner) (string, string, error) {
 	var username string
 	var password string
 	for {
@@ -137,31 +150,11 @@ func login(remote string, scanner *bufio.Scanner) (string, string, string, error
 			fmt.Printf("Failed to login: %s, %s", errorRes.Message, errorRes.Error)
 			continue
 		}
-		return username, password, loginRes.Token, nil
+		return username, password, nil
 	}
 }
 
-func registerRequest(remote, username, password string) ([]byte, error) {
-	requestData, _ := json.Marshal(models.CreateUserC2S{
-		Username: username,
-		Password: password,
-	})
-
-	req, err := http.NewRequest(http.MethodPost, remote+constants.RouteUser+constants.UserRouteRegister, bytes.NewReader(requestData))
-	if err != nil {
-		fmt.Println("Failed to register: Couldn't construct request")
-		return []byte{}, errors.New("register_request_construction_failed")
-	}
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		fmt.Println("Failed to register: Request to remote failed")
-		return []byte{}, errors.New("register_request_failed")
-	}
-	return io.ReadAll(res.Body)
-}
-
-func register(remote string, scanner *bufio.Scanner) (string, string, string, error) {
+func register(remote string, scanner *bufio.Scanner) (string, string, error) {
 	var username string
 	var password string
 	for {
@@ -174,7 +167,7 @@ func register(remote string, scanner *bufio.Scanner) (string, string, string, er
 		password = string(passwordByte)
 		fmt.Print("\n")
 
-		responseData, err := registerRequest(remote, username, password)
+		responseData, err := client.RegisterRequest(remote, username, password)
 		var registerRes models.CreateUserS2C
 		err = json.Unmarshal(responseData, &registerRes)
 
@@ -186,8 +179,7 @@ func register(remote string, scanner *bufio.Scanner) (string, string, string, er
 			continue
 		}
 
-		loginData, err := loginRequest(remote, username, password)
-		var loginRes models.LoginS2C
+		loginData, err := client.LoginRequest(remote, username, password)
 		err = json.Unmarshal(responseData, &registerRes)
 
 		if err != nil {
@@ -197,6 +189,6 @@ func register(remote string, scanner *bufio.Scanner) (string, string, string, er
 			continue
 		}
 
-		return username, password, loginRes.Token, nil
+		return username, password, nil
 	}
 }

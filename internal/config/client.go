@@ -12,10 +12,9 @@ import (
 )
 
 type ClientConfig struct {
-	APIAddress string `json:"api_address"`
-	Username   string `json:"username"`
-	Password   string `json:"password"`
-	Token      string `json:"token"`
+	Remote   string `json:"api_address"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 func LoadClientConfig(configFile string) (ClientConfig, error) {
