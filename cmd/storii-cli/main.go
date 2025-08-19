@@ -12,17 +12,12 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/b2dennis/storii/internal/client"
+	"github.com/b2dennis/storii/internal/config"
 	"github.com/b2dennis/storii/internal/constants"
 	"github.com/b2dennis/storii/internal/models"
 	"golang.org/x/term"
 )
-
-type Config struct {
-	APIAddress string `json:"api_address"`
-	Username   string `json:"username"`
-	Password   string `json:"password"`
-	Token      string `json:"token"`
-}
 
 const configFile = "conf.json"
 
@@ -48,10 +43,10 @@ func main() {
 	}
 
 	var err error
-	var conf Config
+	var conf config.ClientConfig
 
 	if os.Args[1] != "init" {
-		conf, err = loadConfig()
+		conf, err = config.LoadClientConfig(configFile)
 	}
 
 	if os.Args[1] == "init" || err != nil {
@@ -75,24 +70,7 @@ func printUsage() {
 	fmt.Println("storii gen {name}")
 }
 
-func loadConfig() (Config, error) {
-	dat, err := os.ReadFile(configFile)
-	if err != nil {
-		fmt.Printf("No configuration found - Initializing\n")
-		return Config{}, err
-	}
-
-	var conf Config
-	err = json.Unmarshal(dat, &conf)
-	if err != nil {
-		fmt.Printf("Configuration invalid - Reinitializing\n")
-		return Config{}, err
-	}
-
-	return conf, nil
-}
-
-func initConfig() (Config, error) {
+func initConfig() (config.ClientConfig, error) {
 	scanner := bufio.NewScanner(os.Stdin)
 	var remote string
 
@@ -101,7 +79,7 @@ func initConfig() (Config, error) {
 		scanner.Scan()
 		remote = scanner.Text()
 
-		if isRemoteValid(remote) {
+		if config.IsRemoteValid(remote) {
 			break
 		}
 		fmt.Printf("Remote %s is invalid\n", remote)
@@ -124,52 +102,15 @@ func initConfig() (Config, error) {
 	}
 
 	if err != nil {
-		return Config{}, err
+		return config.ClientConfig{}, err
 	}
 
-	return Config{
+	return config.ClientConfig{
 		APIAddress: remote,
 		Username:   username,
 		Password:   password,
 		Token:      token,
 	}, nil
-}
-
-func isRemoteValid(remote string) bool {
-	req, err := http.NewRequest(http.MethodGet, remote+constants.RouteUtil+constants.UtilRoutePing, bytes.NewReader([]byte{}))
-	if err != nil {
-		fmt.Println("Failed to validate remote: Couldn't construct request")
-		return false
-	}
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		fmt.Println("Failed to validate remote: Request to remote failed")
-		return false
-	}
-
-	body, err := io.ReadAll(res.Body)
-	return string(body) == constants.PingRouteSuccessResponse
-}
-
-func loginRequest(remote, username, password string) ([]byte, error) {
-	requestData, _ := json.Marshal(models.LoginC2S{
-		Username: username,
-		Password: password,
-	})
-
-	req, err := http.NewRequest(http.MethodPost, remote+constants.RouteUser+constants.UserRouteLogin, bytes.NewReader(requestData))
-	if err != nil {
-		fmt.Println("Failed to login: Couldn't construct request")
-		return []byte{}, errors.New("login_request_construction_failed")
-	}
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		fmt.Println("Failed to login: Request to remote failed")
-		return []byte{}, errors.New("login_request_failed")
-	}
-	return io.ReadAll(res.Body)
 }
 
 func login(remote string, scanner *bufio.Scanner) (string, string, string, error) {
@@ -185,7 +126,7 @@ func login(remote string, scanner *bufio.Scanner) (string, string, string, error
 		password = string(passwordByte)
 		fmt.Print("\n")
 
-		responseData, err := loginRequest(remote, username, password)
+		responseData, err := client.LoginRequest(remote, username, password)
 		var loginRes models.LoginS2C
 		err = json.Unmarshal(responseData, &loginRes)
 
