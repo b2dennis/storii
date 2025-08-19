@@ -1,6 +1,9 @@
 package server
 
 import (
+	"log/slog"
+	"net/http"
+
 	"github.com/b2dennis/storii/internal/auth"
 	"github.com/b2dennis/storii/internal/config"
 	"github.com/b2dennis/storii/internal/db"
@@ -9,8 +12,6 @@ import (
 	"github.com/b2dennis/storii/internal/middleware"
 	"github.com/b2dennis/storii/internal/utils"
 	"github.com/b2dennis/storii/internal/validation"
-	"log/slog"
-	"net/http"
 
 	ghandlers "github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -18,7 +19,7 @@ import (
 )
 
 type Server struct {
-	config         *config.Config
+	config         *config.ServerConfig
 	logger         *slog.Logger
 	log            *middleware.Log
 	validator      *validation.Validator
@@ -32,7 +33,7 @@ type Server struct {
 
 func NewServer() Server {
 	godotenv.Load()
-	config := config.LoadConfig()
+	config := config.LoadServerConfig()
 
 	dbm := db.NewDbManager(config)
 

@@ -26,8 +26,8 @@ import (
 	"gorm.io/gorm"
 )
 
-func setupTestConfig() *config.Config {
-	testConfig := &config.Config{
+func setupTestConfig() *config.ServerConfig {
+	testConfig := &config.ServerConfig{
 		JWTSecret: "test-secret-key",
 		JWTExpiry: time.Hour * 24,
 		LogOutput: &bytes.Buffer{},
@@ -40,7 +40,7 @@ func setupValidator() *validation.Validator {
 	return validation.NewValidator()
 }
 
-func setupJWTService(conf *config.Config) *auth.JWTService {
+func setupJWTService(conf *config.ServerConfig) *auth.JWTService {
 	return auth.NewJWTService(conf)
 }
 

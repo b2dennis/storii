@@ -14,7 +14,7 @@ type DbManager struct {
 	Db *gorm.DB
 }
 
-func NewDbManager(config *config.Config) *DbManager {
+func NewDbManager(config *config.ServerConfig) *DbManager {
 	Db, err := gorm.Open(sqlite.Open(config.DBPath), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})

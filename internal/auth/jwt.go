@@ -11,10 +11,10 @@ import (
 )
 
 type JWTService struct {
-	config *config.Config
+	config *config.ServerConfig
 }
 
-func NewJWTService(cfg *config.Config) *JWTService {
+func NewJWTService(cfg *config.ServerConfig) *JWTService {
 	return &JWTService{config: cfg}
 }
 
