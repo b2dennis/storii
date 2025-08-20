@@ -26,6 +26,7 @@ func EncryptPassword(secret, masterPassword []byte) models.StoredPassword {
 	ciphertext := aesgcm.Seal(nil, iv, secret, nil)
 
 	tag := ciphertext[len(ciphertext)-16:]
+
 	ct := ciphertext[:len(ciphertext)-16]
 
 	ctHex := make([]byte, len(ct)*2)

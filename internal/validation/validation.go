@@ -131,7 +131,6 @@ func formatValidationError(err validator.FieldError) string {
 	case "password_name":
 		return "password name cannot be empty or contain only whitespace"
 	case "url":
-
 		return fmt.Sprintf("%s must be a valid URL", field)
 	default:
 		return fmt.Sprintf("%s is invalid", field)

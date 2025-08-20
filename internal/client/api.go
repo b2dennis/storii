@@ -93,6 +93,7 @@ func SetPasswordRequest(remote, username, masterPassword, name, secret string) b
 		fmt.Println("Failed to set password: Username, Password or Remote invalid, please use storii init again.")
 	}
 	encrypted := crypto.EncryptPassword([]byte(secret), []byte(masterPassword))
+
 	data := models.SetPasswordC2S{
 		Name:          name,
 		Value:         string(encrypted.Value),
