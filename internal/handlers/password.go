@@ -43,7 +43,7 @@ func (phm *PasswordHandlerManager) RegisterPasswordHandlers(r *mux.Router) {
 			Route:   constants.PasswordRouteFetch,
 		},
 		{
-			Handler: phm.jwt.JwtMiddleware(phm.AddPassword),
+			Handler: phm.jwt.JwtMiddleware(phm.SetPassword),
 			Method:  http.MethodPost,
 			Route:   constants.PasswordRouteAdd,
 		},
@@ -98,7 +98,7 @@ func (phm *PasswordHandlerManager) GetPasswords(w http.ResponseWriter, r *http.R
 	phm.responseWriter.WriteSuccessResponse(r.Context(), w, response, http.StatusOK)
 }
 
-func (phm *PasswordHandlerManager) AddPassword(w http.ResponseWriter, r *http.Request) {
+func (phm *PasswordHandlerManager) SetPassword(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	userIDStr := r.Header.Get(constants.AuthHeaderUserID)
@@ -108,45 +108,38 @@ func (phm *PasswordHandlerManager) AddPassword(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	var addPasswordRequest models.AddPasswordC2S
-	err = json.NewDecoder(r.Body).Decode(&addPasswordRequest)
+	var setPasswordRequest models.SetPasswordC2S
+	err = json.NewDecoder(r.Body).Decode(&setPasswordRequest)
 	if err != nil {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorInvalidJson)
 		return
 	}
 
-	validationErrors := phm.validator.ValidateStruct(addPasswordRequest)
+	validationErrors := phm.validator.ValidateStruct(setPasswordRequest)
 	if len(validationErrors) > 0 {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorValidation, strings.Join(validationErrors, "; "))
 		return
 	}
 
-	var existing models.StoredPassword
-	result := phm.dbm.Db.Where("user_id = ? AND name = ?", UserID, addPasswordRequest.Name).First(&existing)
-	if result.RowsAffected > 0 {
-		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusBadRequest, constants.ErrorDuplicatePassword)
-		return
-	}
-
-	value, err := hex.DecodeString(addPasswordRequest.Value)
+	value, err := hex.DecodeString(setPasswordRequest.Value)
 	if err != nil {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform password value to byte array")
 		return
 	}
 
-	iv, err := hex.DecodeString(addPasswordRequest.IV)
+	iv, err := hex.DecodeString(setPasswordRequest.IV)
 	if err != nil {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform password IV to byte array")
 		return
 	}
 
-	authTag, err := hex.DecodeString(addPasswordRequest.AuthTag)
+	authTag, err := hex.DecodeString(setPasswordRequest.AuthTag)
 	if err != nil {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform password auth tag to byte array")
 		return
 	}
 
-	salt, err := hex.DecodeString(addPasswordRequest.Salt)
+	salt, err := hex.DecodeString(setPasswordRequest.Salt)
 	if err != nil {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorInternalServer, "Could not transform keygen salt to byte array")
 		return
@@ -154,21 +147,21 @@ func (phm *PasswordHandlerManager) AddPassword(w http.ResponseWriter, r *http.Re
 
 	newPassword := &models.StoredPassword{
 		UserID:        uint(UserID),
-		Name:          addPasswordRequest.Name,
+		Name:          setPasswordRequest.Name,
 		Value:         value,
 		IV:            iv,
 		AuthTag:       authTag,
 		Salt:          salt,
-		AssociatedURL: addPasswordRequest.AssociatedURL,
+		AssociatedURL: setPasswordRequest.AssociatedURL,
 	}
 
-	result = phm.dbm.Db.Create(newPassword)
+	result := phm.dbm.Db.Create(newPassword)
 	if result.RowsAffected == 0 {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorCreationFailed, "Could not create password")
 		return
 	}
 
-	response := models.AddPasswordS2C{
+	response := models.SetPasswordS2C{
 		NewPassword: models.S2CPassword{
 			Name:          newPassword.Name,
 			Value:         hex.EncodeToString(newPassword.Value),
@@ -179,7 +172,7 @@ func (phm *PasswordHandlerManager) AddPassword(w http.ResponseWriter, r *http.Re
 		},
 	}
 
-	phm.logger.InfoContext(r.Context(), constants.MessagePasswordCreated, constants.LogKeyPasswordName, newPassword.Name)
+	phm.logger.InfoContext(r.Context(), constants.MessagePasswordSet, constants.LogKeyPasswordName, newPassword.Name)
 	phm.responseWriter.WriteSuccessResponse(r.Context(), w, response, http.StatusCreated)
 }
 

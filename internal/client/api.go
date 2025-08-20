@@ -13,24 +13,58 @@ import (
 	"github.com/b2dennis/storii/internal/models"
 )
 
+func ReadResponse(data []byte, target any) error {
+	var res models.SuccessS2C
+	err := json.Unmarshal(data, &res)
+	if err != nil {
+		return err
+	}
+
+	resData, err := json.Marshal(res.Data)
+	err = json.Unmarshal(resData, target)
+	return err
+}
+
 func LoginRequest(remote, username, password string) ([]byte, error) {
-	requestData, _ := json.Marshal(models.LoginC2S{
+	requestData, err := json.Marshal(models.LoginC2S{
 		Username: username,
 		Password: password,
 	})
+	if err != nil {
+		fmt.Printf("Failed to login: %v", err)
+		return []byte{}, err
+	}
 
 	req, err := http.NewRequest(http.MethodPost, remote+constants.RouteUser+constants.UserRouteLogin, bytes.NewReader(requestData))
 	if err != nil {
 		fmt.Println("Failed to login: Couldn't construct request")
-		return []byte{}, errors.New("login_request_construction_failed")
+		return []byte{}, err
 	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		fmt.Println("Failed to login: Request to remote failed")
-		return []byte{}, errors.New("login_request_failed")
+		return []byte{}, err
 	}
 	return io.ReadAll(res.Body)
+}
+
+func getToken(remote, username, password string) (string, error) {
+	resData, err := LoginRequest(remote, username, password)
+	if err != nil {
+		return "", err
+	}
+
+	var loginRes models.LoginS2C
+	err = ReadResponse(resData, &loginRes)
+	if err != nil {
+		var errorRes models.ErrorS2C
+		_ = json.Unmarshal(resData, &errorRes)
+		fmt.Printf("Failed to login: %s, %s", errorRes.Message, errorRes.Error)
+		return "", err
+	}
+
+	return loginRes.Token, nil
 }
 
 func RegisterRequest(remote, username, password string) ([]byte, error) {
@@ -53,10 +87,13 @@ func RegisterRequest(remote, username, password string) ([]byte, error) {
 	return io.ReadAll(res.Body)
 }
 
-// TODO: Login
-func SetPasswordRequest(remote, name, secret, masterPassword string) bool {
+func SetPasswordRequest(remote, username, masterPassword, name, secret string) bool {
+	token, err := getToken(remote, username, masterPassword)
+	if err != nil {
+		fmt.Println("Failed to set password: Username, Password or Remote invalid, please use storii init again.")
+	}
 	encrypted := crypto.EncryptPassword([]byte(secret), []byte(masterPassword))
-	data := models.AddPasswordC2S{
+	data := models.SetPasswordC2S{
 		Name:          name,
 		Value:         string(encrypted.Value),
 		IV:            string(encrypted.IV),
@@ -67,7 +104,8 @@ func SetPasswordRequest(remote, name, secret, masterPassword string) bool {
 
 	dataJson, _ := json.Marshal(data)
 
-	req, err := http.NewRequest(http.MethodPut, remote+constants.RoutePassword+constants.PasswordRouteUpdate, bytes.NewReader(dataJson))
+	req, err := http.NewRequest(http.MethodPost, remote+constants.RoutePassword+constants.PasswordRouteAdd, bytes.NewReader(dataJson))
+	req.Header.Add("Authorization", "Bearer "+token)
 	if err != nil {
 		fmt.Println("Failed to update password: Couldn't construct request")
 		return false
@@ -80,7 +118,7 @@ func SetPasswordRequest(remote, name, secret, masterPassword string) bool {
 	}
 
 	dataBytes, err := io.ReadAll(res.Body)
-	var resStruct models.AddPasswordS2C
+	var resStruct models.SetPasswordS2C
 
 	json.Unmarshal(dataBytes, &resStruct)
 	if err != nil {
@@ -91,7 +129,15 @@ func SetPasswordRequest(remote, name, secret, masterPassword string) bool {
 	}
 	return true
 }
-func DeletePasswordRequest(name string)
-func GeneratePasswordRequest(name string)
-func GetPasswordRequest(name string)
-func ListPasswordsRequest()
+func DeletePasswordRequest(name string) {
+
+}
+func GeneratePasswordRequest(name string) {
+
+}
+func GetPasswordRequest(name string) {
+
+}
+func ListPasswordsRequest() {
+
+}

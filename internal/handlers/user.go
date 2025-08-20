@@ -164,7 +164,7 @@ func (uhm *UserHandlerManager) LoginUser(w http.ResponseWriter, r *http.Request)
 	r = r.WithContext(context.WithValue(r.Context(), constants.ContextKeyUsername, user.Username))
 	r = r.WithContext(context.WithValue(r.Context(), constants.ContextKeyUserID, user.ID))
 
-	uhm.logger.InfoContext(r.Context(), constants.MessageUserCreated)
+	uhm.logger.InfoContext(r.Context(), constants.MessageUserLogin)
 	uhm.responseWriter.WriteSuccessResponse(r.Context(), w, response)
 }
 

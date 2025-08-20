@@ -15,7 +15,7 @@ type LoginC2S struct {
 
 type UpdateUserC2S = CreateUserC2S
 
-type AddPasswordC2S struct {
+type SetPasswordC2S struct {
 	Name          string `json:"name" validate:"required,min=1,max=100,password_name"`
 	Value         string `json:"value" validate:"required,hexadecimal,len=512"`
 	IV            string `json:"iv" validate:"required,hexadecimal,len=24"`
@@ -29,7 +29,7 @@ type DeletePasswordC2S struct {
 }
 
 type UpdatePasswordC2S struct {
-	AddPasswordC2S
+	SetPasswordC2S
 	NewName string `json:"new_name" validate:"required,min=1,max=100,password_name"`
 }
 

@@ -10,7 +10,7 @@ const (
 	MessageUserDeleted      = "user_deleted"
 	MessageUserUpdated      = "user_updated"
 	MessagePasswordsFetched = "passwords_fetched"
-	MessagePasswordCreated  = "password_created"
+	MessagePasswordSet      = "password_set"
 	MessagePasswordDeleted  = "password_deleted"
 	MessagePasswordUpdated  = "password_updated"
 )

@@ -730,13 +730,13 @@ func TestAddPassword(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		requestBody    models.AddPasswordC2S
+		requestBody    models.SetPasswordC2S
 		expectedStatus int
 		expectError    bool
 	}{
 		{
 			name: "Valid password addition",
-			requestBody: models.AddPasswordC2S{
+			requestBody: models.SetPasswordC2S{
 				Name:          "newpassword",
 				Value:         hex.EncodeToString(value),
 				IV:            hex.EncodeToString(iv),
@@ -749,7 +749,7 @@ func TestAddPassword(t *testing.T) {
 		},
 		{
 			name: "Duplicate password name",
-			requestBody: models.AddPasswordC2S{
+			requestBody: models.SetPasswordC2S{
 				Name:          "newpassword",
 				Value:         hex.EncodeToString(value),
 				IV:            hex.EncodeToString(iv),
@@ -762,7 +762,7 @@ func TestAddPassword(t *testing.T) {
 		},
 		{
 			name: "Invalid hex data",
-			requestBody: models.AddPasswordC2S{
+			requestBody: models.SetPasswordC2S{
 				Name:          "invalidhex",
 				Value:         "invalid-hex-data",
 				IV:            hex.EncodeToString(iv),
@@ -783,7 +783,7 @@ func TestAddPassword(t *testing.T) {
 			req.Header.Set("Authorization", "Bearer "+token)
 			w := httptest.NewRecorder()
 
-			jwt.JwtMiddleware(phm.AddPassword)(w, req)
+			jwt.JwtMiddleware(phm.SetPassword)(w, req)
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
@@ -1010,7 +1010,7 @@ func TestUserPasswordFlow(t *testing.T) {
 	authTag := make([]byte, 16)
 	salt := make([]byte, 16)
 
-	addPasswordReq := models.AddPasswordC2S{
+	addPasswordReq := models.SetPasswordC2S{
 		Name:          "testsite",
 		Value:         hex.EncodeToString(value),
 		IV:            hex.EncodeToString(iv),
@@ -1025,7 +1025,7 @@ func TestUserPasswordFlow(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	w = httptest.NewRecorder()
 
-	jwt.JwtMiddleware(phm.AddPassword)(w, req)
+	jwt.JwtMiddleware(phm.SetPassword)(w, req)
 
 	if w.Code != http.StatusCreated {
 		t.Fatalf("Failed to add password: status %d", w.Code)
@@ -1058,7 +1058,7 @@ func TestUserPasswordFlow(t *testing.T) {
 
 	// 5. Update password
 	updatePasswordReq := models.UpdatePasswordC2S{
-		AddPasswordC2S: models.AddPasswordC2S{
+		SetPasswordC2S: models.SetPasswordC2S{
 			Name:          "testsite",
 			Value:         hex.EncodeToString(value),
 			IV:            hex.EncodeToString(iv),
@@ -1168,7 +1168,7 @@ func TestUpdatePasswordNotFound(t *testing.T) {
 	salt := make([]byte, 16)
 
 	updatePasswordReq := models.UpdatePasswordC2S{
-		AddPasswordC2S: models.AddPasswordC2S{
+		SetPasswordC2S: models.SetPasswordC2S{
 			Name:          "nonexistent",
 			Value:         hex.EncodeToString(value),
 			IV:            hex.EncodeToString(iv),
@@ -1306,7 +1306,7 @@ func TestInvalidJSONRequests(t *testing.T) {
 		},
 		{
 			name:    "Add password with invalid JSON",
-			handler: jwt.JwtMiddleware(phm.AddPassword),
+			handler: jwt.JwtMiddleware(phm.SetPassword),
 			method:  "POST",
 			path:    "/password/create",
 			body:    `{"invalid": json}`,

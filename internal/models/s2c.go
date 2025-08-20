@@ -40,7 +40,7 @@ type GetPasswordsS2C struct {
 	Passwords []S2CPassword `json:"passwords"`
 }
 
-type AddPasswordS2C struct {
+type SetPasswordS2C struct {
 	NewPassword S2CPassword `json:"new_password"`
 }
 
@@ -48,4 +48,4 @@ type DeletePasswordS2C struct {
 	Name string `json:"name"`
 }
 
-type UpdatePasswordS2C = AddPasswordS2C
+type UpdatePasswordS2C = SetPasswordS2C
