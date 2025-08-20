@@ -17,7 +17,7 @@ type UpdateUserC2S = CreateUserC2S
 
 type SetPasswordC2S struct {
 	Name          string `json:"name" validate:"required,min=1,max=100,password_name"`
-	Value         string `json:"value" validate:"required,hexadecimal,len=512"`
+	Value         string `json:"value" validate:"required,hexadecimal,max=512"`
 	IV            string `json:"iv" validate:"required,hexadecimal,len=24"`
 	AuthTag       string `json:"auth_tag" validate:"required,hexadecimal,len=32"`
 	Salt          string `json:"salt" validate:"required,hexadecimal,len=32"`
