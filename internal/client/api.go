@@ -134,7 +134,46 @@ func SetPasswordRequest(remote, username, masterPassword, name, secret string) b
 	fmt.Println("Password was successfuly set.")
 	return true
 }
-func DeletePasswordRequest(name string) {
+func DeletePasswordRequest(remote, username, masterPassword, name string) bool {
+	token, err := getToken(remote, username, masterPassword)
+	if err != nil {
+		fmt.Println("Failed to set password: Username, Password or Remote invalid, please use storii init again.")
+	}
+
+	data := models.DeletePasswordC2S{
+		Name: name,
+	}
+
+	dataJson, _ := json.Marshal(data)
+
+	req, err := http.NewRequest(http.MethodPost, remote+constants.RoutePassword+constants.PasswordRouteDelete, bytes.NewReader(dataJson))
+	req.Header.Add("Authorization", "Bearer "+token)
+	if err != nil {
+		fmt.Println("Failed to delete password: Couldn't construct request")
+		return false
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Println("Failed to delete password: Request to remote failed")
+		return false
+	}
+
+	dataBytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println("Failed to delete password: Couldn't read response")
+	}
+	var resStruct models.DeletePasswordS2C
+
+	err = ReadResponse(dataBytes, &resStruct)
+	if err != nil {
+		var resError models.ErrorS2C
+		json.Unmarshal(dataBytes, &resError)
+		fmt.Printf("Failed to delete password: %s, %s\n", resError.Message, resError.Error)
+		return false
+	}
+	fmt.Println("Password was successfuly deleted.")
+	return true
 
 }
 func GeneratePasswordRequest(remote, username, masterPassword, name string) {

@@ -1,7 +1,6 @@
 package client
 
 import (
-	"fmt"
 	"math/rand"
 )
 
