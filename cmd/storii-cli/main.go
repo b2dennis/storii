@@ -67,7 +67,7 @@ func main() {
 	case "del":
 		client.DeletePasswordRequest(os.Args[2])
 	case "gen":
-		client.GeneratePasswordRequest(os.Args[2])
+		client.GeneratePasswordRequest(conf.Remote, conf.Username, conf.Password, os.Args[2])
 	case "get":
 		client.GetPasswordRequest(conf.Remote, conf.Username, conf.Password, os.Args[2])
 	case "lst":

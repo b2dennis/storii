@@ -137,8 +137,10 @@ func SetPasswordRequest(remote, username, masterPassword, name, secret string) b
 func DeletePasswordRequest(name string) {
 
 }
-func GeneratePasswordRequest(name string) {
-
+func GeneratePasswordRequest(remote, username, masterPassword, name string) {
+	password := GeneratePassword(24)
+	fmt.Printf("Generated new password: %s\n", password)
+	SetPasswordRequest(remote, username, masterPassword, name, password)
 }
 func GetPasswordRequest(remote, username, masterPassword, name string) bool {
 	dataBytes, err := fetchPasswordRequest(remote, username, masterPassword)
