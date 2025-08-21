@@ -697,7 +697,7 @@ func TestGetPasswords(t *testing.T) {
 	var response models.SuccessS2C
 	json.NewDecoder(w.Body).Decode(&response)
 
-	var passwordsResp models.GetPasswordsS2C
+	var passwordsResp models.ListPasswordsS2C
 	dataBytes, _ := json.Marshal(response.Data)
 	json.Unmarshal(dataBytes, &passwordsResp)
 
@@ -1043,7 +1043,7 @@ func TestUserPasswordFlow(t *testing.T) {
 	}
 
 	var getPasswordsResponse models.SuccessS2C
-	var passwordsData models.GetPasswordsS2C
+	var passwordsData models.ListPasswordsS2C
 	json.NewDecoder(w.Body).Decode(&getPasswordsResponse)
 	dataBytes, _ = json.Marshal(getPasswordsResponse.Data)
 	json.Unmarshal(dataBytes, &passwordsData)
@@ -1373,7 +1373,7 @@ func TestPasswordIsolationBetweenUsers(t *testing.T) {
 	jwt.JwtMiddleware(phm.GetPasswords)(w, req)
 
 	var response models.SuccessS2C
-	var passwordsData models.GetPasswordsS2C
+	var passwordsData models.ListPasswordsS2C
 	json.NewDecoder(w.Body).Decode(&response)
 	dataBytes, _ := json.Marshal(response.Data)
 	json.Unmarshal(dataBytes, &passwordsData)

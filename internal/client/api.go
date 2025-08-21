@@ -108,26 +108,27 @@ func SetPasswordRequest(remote, username, masterPassword, name, secret string) b
 	req, err := http.NewRequest(http.MethodPost, remote+constants.RoutePassword+constants.PasswordRouteAdd, bytes.NewReader(dataJson))
 	req.Header.Add("Authorization", "Bearer "+token)
 	if err != nil {
-		fmt.Println("Failed to update password: Couldn't construct request")
+		fmt.Println("Failed to set password: Couldn't construct request")
 		return false
 	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		fmt.Println("Failed to update password: Request to remote failed")
+		fmt.Println("Failed to set password: Request to remote failed")
 		return false
 	}
 
 	dataBytes, err := io.ReadAll(res.Body)
 	var resStruct models.SetPasswordS2C
 
-	json.Unmarshal(dataBytes, &resStruct)
+	ReadResponse(dataBytes, &resStruct)
 	if err != nil {
 		var resError models.ErrorS2C
 		json.Unmarshal(dataBytes, &resError)
-		fmt.Printf("Failed to update password: %s, %s\n", resError.Message, resError.Error)
+		fmt.Printf("Failed to set password: %s, %s\n", resError.Message, resError.Error)
 		return false
 	}
+	fmt.Println("Password was successfuly set.")
 	return true
 }
 func DeletePasswordRequest(name string) {
@@ -139,6 +140,37 @@ func GeneratePasswordRequest(name string) {
 func GetPasswordRequest(name string) {
 
 }
-func ListPasswordsRequest() {
+func ListPasswordsRequest(remote, username, masterPassword string) bool {
+	token, err := getToken(remote, username, masterPassword)
+	if err != nil {
+		fmt.Println("Failed to fetch passwords: Username, Password or Remote invalid, please use storii init again.")
+	}
 
+	req, err := http.NewRequest(http.MethodGet, remote+constants.RoutePassword+constants.PasswordRouteList, bytes.NewReader([]byte{}))
+	req.Header.Add("Authorization", "Bearer "+token)
+	if err != nil {
+		fmt.Println("Failed to fetch passwords: Couldn't construct request")
+		return false
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Println("Failed to fetch passwords: Request to remote failed")
+		return false
+	}
+
+	dataBytes, err := io.ReadAll(res.Body)
+	var resStruct models.ListPasswordsS2C
+
+	ReadResponse(dataBytes, &resStruct)
+	if err != nil {
+		var resError models.ErrorS2C
+		json.Unmarshal(dataBytes, &resError)
+		fmt.Printf("Failed to set password: %s, %s\n", resError.Message, resError.Error)
+		return false
+	}
+	for _, password := range resStruct.Passwords {
+		fmt.Println(password.Name)
+	}
+	return true
 }

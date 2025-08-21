@@ -36,7 +36,7 @@ type S2CPassword struct {
 	AssociatedURL string `json:"associated_url,omitempty"`
 }
 
-type GetPasswordsS2C struct {
+type ListPasswordsS2C struct {
 	Passwords []S2CPassword `json:"passwords"`
 }
 

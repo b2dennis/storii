@@ -23,7 +23,7 @@ const (
 
 // Password Routes
 const (
-	PasswordRouteFetch  = ""
+	PasswordRouteList   = ""
 	PasswordRouteAdd    = "/create"
 	PasswordRouteDelete = "/delete"
 	PasswordRouteUpdate = "/update"

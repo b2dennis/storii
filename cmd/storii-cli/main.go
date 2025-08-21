@@ -71,7 +71,7 @@ func main() {
 	case "get":
 		client.GetPasswordRequest(os.Args[2])
 	case "lst":
-		client.ListPasswordsRequest()
+		client.ListPasswordsRequest(conf.Remote, conf.Username, conf.Password)
 	default:
 		printUsage()
 	}

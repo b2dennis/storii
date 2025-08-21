@@ -40,7 +40,7 @@ func (phm *PasswordHandlerManager) RegisterPasswordHandlers(r *mux.Router) {
 		{
 			Handler: phm.jwt.JwtMiddleware(phm.GetPasswords),
 			Method:  http.MethodGet,
-			Route:   constants.PasswordRouteFetch,
+			Route:   constants.PasswordRouteList,
 		},
 		{
 			Handler: phm.jwt.JwtMiddleware(phm.SetPassword),
@@ -90,7 +90,7 @@ func (phm *PasswordHandlerManager) GetPasswords(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	response := models.GetPasswordsS2C{
+	response := models.ListPasswordsS2C{
 		Passwords: responsePasswords,
 	}
 
