@@ -119,9 +119,12 @@ func SetPasswordRequest(remote, username, masterPassword, name, secret string) b
 	}
 
 	dataBytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println("Failed to set password: Couldn't read response")
+	}
 	var resStruct models.SetPasswordS2C
 
-	ReadResponse(dataBytes, &resStruct)
+	err = ReadResponse(dataBytes, &resStruct)
 	if err != nil {
 		var resError models.ErrorS2C
 		json.Unmarshal(dataBytes, &resError)
@@ -137,32 +140,43 @@ func DeletePasswordRequest(name string) {
 func GeneratePasswordRequest(name string) {
 
 }
-func GetPasswordRequest(name string) {
-
-}
-func ListPasswordsRequest(remote, username, masterPassword string) bool {
-	token, err := getToken(remote, username, masterPassword)
+func GetPasswordRequest(remote, username, masterPassword, name string) bool {
+	dataBytes, err := fetchPasswordRequest(remote, username, masterPassword)
 	if err != nil {
-		fmt.Println("Failed to fetch passwords: Username, Password or Remote invalid, please use storii init again.")
-	}
-
-	req, err := http.NewRequest(http.MethodGet, remote+constants.RoutePassword+constants.PasswordRouteList, bytes.NewReader([]byte{}))
-	req.Header.Add("Authorization", "Bearer "+token)
-	if err != nil {
-		fmt.Println("Failed to fetch passwords: Couldn't construct request")
 		return false
 	}
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		fmt.Println("Failed to fetch passwords: Request to remote failed")
-		return false
-	}
-
-	dataBytes, err := io.ReadAll(res.Body)
 	var resStruct models.ListPasswordsS2C
 
-	ReadResponse(dataBytes, &resStruct)
+	err = ReadResponse(dataBytes, &resStruct)
+	if err != nil {
+		var resError models.ErrorS2C
+		json.Unmarshal(dataBytes, &resError)
+		fmt.Printf("Failed to set password: %s, %s\n", resError.Message, resError.Error)
+		return false
+	}
+	var target models.S2CPassword
+	for _, password := range resStruct.Passwords {
+		if password.Name == name {
+			target = password
+		}
+	}
+
+	decrypted, err := crypto.DecryptPassword(target.Value, target.IV, target.AuthTag, target.Salt, masterPassword)
+	if err != nil {
+		fmt.Println("Failed to decrypt password")
+		return false
+	}
+	fmt.Println(decrypted)
+	return true
+}
+func ListPasswordsRequest(remote, username, masterPassword string) bool {
+	dataBytes, err := fetchPasswordRequest(remote, username, masterPassword)
+	if err != nil {
+		return false
+	}
+	var resStruct models.ListPasswordsS2C
+
+	err = ReadResponse(dataBytes, &resStruct)
 	if err != nil {
 		var resError models.ErrorS2C
 		json.Unmarshal(dataBytes, &resError)
@@ -173,4 +187,27 @@ func ListPasswordsRequest(remote, username, masterPassword string) bool {
 		fmt.Println(password.Name)
 	}
 	return true
+}
+
+func fetchPasswordRequest(remote, username, masterPassword string) ([]byte, error) {
+	token, err := getToken(remote, username, masterPassword)
+	if err != nil {
+		fmt.Println("Failed to fetch passwords: Username, Password or Remote invalid, please use storii init again.")
+		return []byte{}, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, remote+constants.RoutePassword+constants.PasswordRouteList, bytes.NewReader([]byte{}))
+	req.Header.Add("Authorization", "Bearer "+token)
+	if err != nil {
+		fmt.Println("Failed to fetch passwords: Couldn't construct request")
+		return []byte{}, err
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Println("Failed to fetch passwords: Request to remote failed")
+		return []byte{}, err
+	}
+
+	return io.ReadAll(res.Body)
 }

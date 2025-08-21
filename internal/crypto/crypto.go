@@ -46,3 +46,53 @@ func EncryptPassword(secret, masterPassword []byte) models.StoredPassword {
 		Salt:    saltHex,
 	}
 }
+
+func DecryptPassword(ctHex, ivHex, tagHex, saltHex, masterPassword string) (string, error) {
+	ct := make([]byte, len(ctHex)/2)
+	iv := make([]byte, len(ivHex)/2)
+	tag := make([]byte, len(tagHex)/2)
+	salt := make([]byte, len(saltHex)/2)
+
+	_, err := hex.Decode(ct, []byte(ctHex))
+	if err != nil {
+		return "", err
+	}
+
+	_, err = hex.Decode(iv, []byte(ivHex))
+	if err != nil {
+		return "", err
+	}
+
+	_, err = hex.Decode(tag, []byte(tagHex))
+	if err != nil {
+		return "", err
+	}
+
+	_, err = hex.Decode(salt, []byte(saltHex))
+	if err != nil {
+		return "", err
+	}
+
+	key := argon2.IDKey([]byte(masterPassword), salt, 3, 64*1024, 2, 32)
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+
+	// Reconstruct the full ciphertext (data + tag)
+	ciphertext := append(ct, tag...)
+
+	// Decrypt
+	plaintext, err := aesgcm.Open(nil, iv, ciphertext, nil)
+	if err != nil {
+		return "", err
+	}
+
+	return string(plaintext), nil
+}
