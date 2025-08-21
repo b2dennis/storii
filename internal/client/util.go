@@ -12,7 +12,5 @@ func GeneratePassword(n int) string {
 		retVal[i] = permittedChars[rand.Intn(len(permittedChars))]
 	}
 
-	fmt.Println(string(retVal))
-
 	return string(retVal)
 }
