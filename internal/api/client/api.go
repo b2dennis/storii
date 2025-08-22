@@ -13,58 +13,7 @@ import (
 	"github.com/b2dennis/storii/internal/models"
 )
 
-func ReadResponse(data []byte, target any) error {
-	var res models.SuccessS2C
-	err := json.Unmarshal(data, &res)
-	if err != nil {
-		return err
-	}
-
-	resData, err := json.Marshal(res.Data)
-	err = json.Unmarshal(resData, target)
-	return err
-}
-
 func LoginRequest(remote, username, password string) ([]byte, error) {
-	requestData, err := json.Marshal(models.LoginC2S{
-		Username: username,
-		Password: password,
-	})
-	if err != nil {
-		fmt.Printf("Failed to login: %v", err)
-		return []byte{}, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, remote+constants.RouteUser+constants.UserRouteLogin, bytes.NewReader(requestData))
-	if err != nil {
-		fmt.Println("Failed to login: Couldn't construct request")
-		return []byte{}, err
-	}
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		fmt.Println("Failed to login: Request to remote failed")
-		return []byte{}, err
-	}
-	return io.ReadAll(res.Body)
-}
-
-func getToken(remote, username, password string) (string, error) {
-	resData, err := LoginRequest(remote, username, password)
-	if err != nil {
-		return "", err
-	}
-
-	var loginRes models.LoginS2C
-	err = ReadResponse(resData, &loginRes)
-	if err != nil {
-		var errorRes models.ErrorS2C
-		_ = json.Unmarshal(resData, &errorRes)
-		fmt.Printf("Failed to login: %s, %s", errorRes.Message, errorRes.Error)
-		return "", err
-	}
-
-	return loginRes.Token, nil
 }
 
 func RegisterRequest(remote, username, password string) ([]byte, error) {
