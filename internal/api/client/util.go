@@ -56,6 +56,7 @@ func request[K any](conf models.ClientConfig, data any, method, url string) (K, 
 	if err != nil {
 		return none, err
 	}
+	defer response.Body.Close()
 
 	resData, err := io.ReadAll(response.Body)
 	if err != nil {
