@@ -6,11 +6,11 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/b2dennis/storii/internal/api/server"
 	"github.com/b2dennis/storii/internal/auth"
 	"github.com/b2dennis/storii/internal/config"
 	"github.com/b2dennis/storii/internal/constants"
 	"github.com/b2dennis/storii/internal/db"
-	"github.com/b2dennis/storii/internal/handlers"
 	"github.com/b2dennis/storii/internal/logging"
 	"github.com/b2dennis/storii/internal/middleware"
 	"github.com/b2dennis/storii/internal/models"
@@ -1410,8 +1410,7 @@ func TestPasswordIsolationBetweenUsers(t *testing.T) {
 func BenchmarkHashPassword(b *testing.B) {
 	password := "BenchmarkPassword123!"
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = auth.HashPassword(password)
 	}
 }
@@ -1420,8 +1419,7 @@ func BenchmarkCheckPasswordHash(b *testing.B) {
 	password := "BenchmarkPassword123!"
 	hash, _ := auth.HashPassword(password)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = auth.CheckPasswordHash(password, hash)
 	}
 }
@@ -1433,8 +1431,7 @@ func BenchmarkGenerateJWT(b *testing.B) {
 	user := models.User{Username: "benchuser"}
 	user.ID = 1
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = jwtService.GenerateJWT(user)
 	}
 }
@@ -1447,8 +1444,7 @@ func BenchmarkValidateJWT(b *testing.B) {
 	user.ID = 1
 	token, _ := jwtService.GenerateJWT(user)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = jwtService.ValidateJWT(token)
 	}
 }

@@ -4,10 +4,10 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/b2dennis/storii/internal/api/server"
 	"github.com/b2dennis/storii/internal/auth"
 	"github.com/b2dennis/storii/internal/config"
 	"github.com/b2dennis/storii/internal/db"
-	"github.com/b2dennis/storii/internal/handlers"
 	"github.com/b2dennis/storii/internal/logging"
 	"github.com/b2dennis/storii/internal/middleware"
 	"github.com/b2dennis/storii/internal/utils"

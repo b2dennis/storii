@@ -8,8 +8,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/b2dennis/storii/internal/client"
+	"github.com/b2dennis/storii/internal/api/client"
 	"github.com/b2dennis/storii/internal/config"
+	"github.com/b2dennis/storii/internal/crypto"
 	"github.com/b2dennis/storii/internal/models"
 	"golang.org/x/term"
 )
@@ -61,17 +62,37 @@ func main() {
 		file.Write(jsonData)
 		return
 	}
+	clientConfig := models.ClientConfig{
+		Remote:         conf.Remote,
+		Username:       conf.Username,
+		MasterPassword: conf.Password,
+	}
+
 	switch strings.ToLower(os.Args[1]) {
 	case "set":
-		client.SetPasswordRequest(conf.Remote, conf.Username, conf.Password, os.Args[2], os.Args[3])
-	case "del":
+		encrypted := crypto.EncryptPassword([]byte(os.Args[3]), []byte(conf.Password))
+		data := models.SetPasswordC2S{
+			Name:    os.Args[2],
+			Value:   string(encrypted.Value),
+			IV:      string(encrypted.IV),
+			AuthTag: string(encrypted.AuthTag),
+			Salt:    string(encrypted.Salt),
+		}
+
+		res, err := client.SetPassword(clientConfig, data)
+		if err != nil {
+			fmt.Println("Failed to set password.")
+			return
+		}
+		fmt.Printf("Successfully set password %s.", res.NewPassword.Name)
+	/*case "del":
 		client.DeletePasswordRequest(conf.Remote, conf.Username, conf.Password, os.Args[2])
 	case "gen":
 		client.GeneratePasswordRequest(conf.Remote, conf.Username, conf.Password, os.Args[2])
 	case "get":
 		client.GetPasswordRequest(conf.Remote, conf.Username, conf.Password, os.Args[2])
 	case "lst":
-		client.ListPasswordsRequest(conf.Remote, conf.Username, conf.Password)
+		client.ListPasswordsRequest(conf.Remote, conf.Username, conf.Password)*/
 	default:
 		printUsage()
 	}
@@ -140,15 +161,15 @@ func login(remote string, scanner *bufio.Scanner) (string, string, error) {
 		password = string(passwordByte)
 		fmt.Print("\n")
 
-		responseData, err := client.LoginRequest(remote, username, password)
-		var loginRes models.LoginS2C
-		err = client.ReadResponse(responseData, &loginRes)
+		conf := models.ClientConfig{
+			Remote:         remote,
+			Username:       username,
+			MasterPassword: password,
+		}
 
-		// wrong password returns error response -> fails to unmarshal
+		_, err = client.LoginUser(conf)
 		if err != nil {
-			var errorRes models.ErrorS2C
-			err = json.Unmarshal(responseData, &errorRes)
-			fmt.Printf("Failed to login: %s, %s", errorRes.Message, errorRes.Error)
+			fmt.Println("Username or Password invalid, please retry.")
 			continue
 		}
 		return username, password, nil
@@ -168,25 +189,22 @@ func register(remote string, scanner *bufio.Scanner) (string, string, error) {
 		password = string(passwordByte)
 		fmt.Print("\n")
 
-		responseData, err := client.RegisterRequest(remote, username, password)
-		var registerRes models.CreateUserS2C
-		err = json.Unmarshal(responseData, &registerRes)
+		conf := models.ClientConfig{
+			Remote:         remote,
+			Username:       username,
+			MasterPassword: password,
+		}
 
-		// wrong password returns error response -> fails to unmarshal
+		_, err = client.RegisterUser(conf)
 		if err != nil {
-			var errorRes models.ErrorS2C
-			err = json.Unmarshal(responseData, &errorRes)
-			fmt.Printf("Failed to register: %s, %s", errorRes.Message, errorRes.Error)
+			fmt.Println("Username or Password invalid, please retry.")
 			continue
 		}
 
-		loginData, err := client.LoginRequest(remote, username, password)
-		err = json.Unmarshal(responseData, &registerRes)
+		_, err = client.LoginUser(conf)
 
 		if err != nil {
-			var errorRes models.ErrorS2C
-			err = json.Unmarshal(loginData, &errorRes)
-			fmt.Printf("Failed to login: %s, %s", errorRes.Message, errorRes.Error)
+			fmt.Println("Username or Password invalid, please retry.")
 			continue
 		}
 

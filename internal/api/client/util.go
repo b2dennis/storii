@@ -33,7 +33,7 @@ func ReadResponse(data []byte, target any) error {
 	return json.Unmarshal(resData, target)
 }
 
-func request[K any](data any, config models.ClientConfig, method, url string) (K, error) {
+func request[K any](conf models.ClientConfig, data any, method, url string) (K, error) {
 	var res K
 
 	requestData, err := json.Marshal(data)
@@ -44,6 +44,10 @@ func request[K any](data any, config models.ClientConfig, method, url string) (K
 	req, err := http.NewRequest(method, url, bytes.NewReader(requestData))
 	if err != nil {
 		return res, err
+	}
+
+	if conf.Token != "" {
+		req.Header.Add("Authorization", "Bearer "+conf.Token)
 	}
 
 	response, err := http.DefaultClient.Do(req)
@@ -85,11 +89,7 @@ func checkAuth(conf models.ClientConfig) (models.ClientConfig, error) {
 }
 
 func getToken(conf models.ClientConfig) (string, error) {
-	data := models.LoginC2S{
-		Username: conf.Username,
-		Password: conf.MasterPassword,
-	}
-	res, err := request[models.LoginS2C](data, http.MethodPost, conf.Remote+constants.RouteUser+constants.UserRouteLogin)
+	res, err := LoginUser(conf)
 	if err != nil {
 		return "", err
 	}
