@@ -45,7 +45,7 @@ func (phm *PasswordHandlerManager) RegisterPasswordHandlers(r *mux.Router) {
 		{
 			Handler: phm.jwt.JwtMiddleware(phm.SetPassword),
 			Method:  http.MethodPost,
-			Route:   constants.PasswordRouteAdd,
+			Route:   constants.PasswordRouteSet,
 		},
 		{
 			Handler: phm.jwt.JwtMiddleware(phm.DeletePassword),

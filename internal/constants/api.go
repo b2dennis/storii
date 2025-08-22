@@ -24,7 +24,7 @@ const (
 // Password Routes
 const (
 	PasswordRouteList   = ""
-	PasswordRouteAdd    = "/create"
+	PasswordRouteSet    = "/set"
 	PasswordRouteDelete = "/delete"
 	PasswordRouteUpdate = "/update"
 )

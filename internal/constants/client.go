@@ -1,5 +1,5 @@
 package constants
 
 const (
-	ErrorTokenRequired = "token_required"
+	ErrorAuthRequired = "auth_required"
 )
