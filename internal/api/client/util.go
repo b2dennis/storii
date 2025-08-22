@@ -7,6 +7,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"reflect"
 
 	"github.com/b2dennis/storii/internal/constants"
 	"github.com/b2dennis/storii/internal/models"
@@ -35,15 +36,16 @@ func ReadResponse(data []byte, target any) error {
 
 func request[K any](conf models.ClientConfig, data any, method, url string) (K, error) {
 	var res K
+	var none K
 
 	requestData, err := json.Marshal(data)
 	if err != nil {
-		return res, err
+		return none, err
 	}
 
 	req, err := http.NewRequest(method, url, bytes.NewReader(requestData))
 	if err != nil {
-		return res, err
+		return none, err
 	}
 
 	if conf.Token != "" {
@@ -52,23 +54,29 @@ func request[K any](conf models.ClientConfig, data any, method, url string) (K, 
 
 	response, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return res, err
+		return none, err
 	}
 
 	resData, err := io.ReadAll(response.Body)
 	if err != nil {
-		return res, err
+		return none, err
 	}
 
 	err = ReadResponse(resData, &res)
 	if err != nil {
+		return none, err
+	}
+
+	if reflect.DeepEqual(res, none) {
 		var errorRes models.ErrorS2C
-		_ = json.Unmarshal(resData, &errorRes)
-		return res, err
+		err = json.Unmarshal(resData, &errorRes)
+		if err != nil {
+			return none, err
+		}
+		return none, errors.New(errorRes.Error)
 	}
 
 	return res, nil
-
 }
 
 func checkAuth(conf models.ClientConfig) (models.ClientConfig, error) {
