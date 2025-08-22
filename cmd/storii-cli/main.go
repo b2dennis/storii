@@ -124,7 +124,7 @@ func main() {
 			return
 		}
 		for i, password := range res.Passwords {
-			fmt.Printf("%d: %s", i, password.Name)
+			fmt.Printf("%d: %s\n", i, password.Name)
 		}
 	default:
 		printUsage()
