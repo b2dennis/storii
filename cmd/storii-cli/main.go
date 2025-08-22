@@ -81,18 +81,51 @@ func main() {
 
 		res, err := client.SetPassword(clientConfig, data)
 		if err != nil {
-			fmt.Println("Failed to set password.")
+			fmt.Printf("Failed to set password: %v\n", err)
 			return
 		}
-		fmt.Printf("Successfully set password %s.", res.NewPassword.Name)
-	/*case "del":
-		client.DeletePasswordRequest(conf.Remote, conf.Username, conf.Password, os.Args[2])
+		fmt.Printf("Successfully set password %s.\n", res.NewPassword.Name)
+	case "del":
+		data := models.DeletePasswordC2S{
+			Name: os.Args[2],
+		}
+		res, err := client.DeletePassword(clientConfig, data)
+		if err != nil {
+			fmt.Printf("Failed to delete password: %v\n", err)
+			return
+		}
+		fmt.Printf("Successfully deleted password %s.\n", res.Name)
 	case "gen":
-		client.GeneratePasswordRequest(conf.Remote, conf.Username, conf.Password, os.Args[2])
-	case "get":
-		client.GetPasswordRequest(conf.Remote, conf.Username, conf.Password, os.Args[2])
+		password := client.GeneratePassword(24)
+
+		encrypted := crypto.EncryptPassword([]byte(password), []byte(conf.Password))
+		data := models.SetPasswordC2S{
+			Name:    os.Args[2],
+			Value:   string(encrypted.Value),
+			IV:      string(encrypted.IV),
+			AuthTag: string(encrypted.AuthTag),
+			Salt:    string(encrypted.Salt),
+		}
+
+		res, err := client.SetPassword(clientConfig, data)
+		if err != nil {
+			fmt.Printf("Failed to set password: %v\n", err)
+			return
+		}
+		fmt.Printf("Successfully set password %s to %s.\n", res.NewPassword.Name, password)
+		/*
+			case "get":
+				client.GetPasswordRequest(conf.Remote, conf.Username, conf.Password, os.Args[2])
+		*/
 	case "lst":
-		client.ListPasswordsRequest(conf.Remote, conf.Username, conf.Password)*/
+		res, err := client.ListPasswords(clientConfig)
+		if err != nil {
+			fmt.Printf("Failed to get passwords: %v\n", err)
+			return
+		}
+		for i, password := range res.Passwords {
+			fmt.Printf("%d: %s", i, password.Name)
+		}
 	default:
 		printUsage()
 	}

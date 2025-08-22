@@ -22,7 +22,7 @@ func DeletePassword(conf models.ClientConfig, data models.DeletePasswordC2S) (mo
 		return models.DeletePasswordS2C{}, err
 	}
 
-	return request[models.DeletePasswordS2C](conf, data, http.MethodPost, conf.Remote+constants.RoutePassword+constants.PasswordRouteDelete)
+	return request[models.DeletePasswordS2C](conf, data, http.MethodDelete, conf.Remote+constants.RoutePassword+constants.PasswordRouteDelete)
 }
 
 func ListPasswords(conf models.ClientConfig) (models.ListPasswordsS2C, error) {
