@@ -84,7 +84,7 @@ func main() {
 			fmt.Printf("Failed to set password: %v\n", err)
 			return
 		}
-		fmt.Printf("Successfully set password %s.\n", res.NewPassword.Name)
+		fmt.Printf("Successfully set password \"%s\".\n", res.NewPassword.Name)
 	case "del":
 		data := models.DeletePasswordC2S{
 			Name: os.Args[2],
@@ -94,7 +94,7 @@ func main() {
 			fmt.Printf("Failed to delete password: %v\n", err)
 			return
 		}
-		fmt.Printf("Successfully deleted password %s.\n", res.Name)
+		fmt.Printf("Successfully deleted password \"%s\".\n", res.Name)
 	case "gen":
 		password := client.GeneratePassword(24)
 
@@ -112,7 +112,7 @@ func main() {
 			fmt.Printf("Failed to set password: %v\n", err)
 			return
 		}
-		fmt.Printf("Successfully set password %s to %s.\n", res.NewPassword.Name, password)
+		fmt.Printf("Successfully set password \"%s\" to \"%s\".\n", res.NewPassword.Name, password)
 		/*
 			case "get":
 				client.GetPasswordRequest(conf.Remote, conf.Username, conf.Password, os.Args[2])
