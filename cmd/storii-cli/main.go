@@ -113,10 +113,24 @@ func main() {
 			return
 		}
 		fmt.Printf("Successfully set password \"%s\" to \"%s\".\n", res.NewPassword.Name, password)
-		/*
-			case "get":
-				client.GetPasswordRequest(conf.Remote, conf.Username, conf.Password, os.Args[2])
-		*/
+	case "get":
+		res, err := client.ListPasswords(clientConfig)
+		if err != nil {
+			fmt.Printf("Failed to get passwords: %v\n", err)
+			return
+		}
+		for _, password := range res.Passwords {
+			if password.Name == os.Args[2] {
+				decrypted, err := crypto.DecryptPassword(password.Value, password.IV, password.AuthTag, password.Salt, conf.Password)
+				if err != nil {
+					fmt.Println("Couldn't decrypt password")
+					return
+				}
+				fmt.Println(decrypted)
+				return
+			}
+			fmt.Printf("Password \"%s\" was not found.", os.Args[2])
+		}
 	case "lst":
 		res, err := client.ListPasswords(clientConfig)
 		if err != nil {
