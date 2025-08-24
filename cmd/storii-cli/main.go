@@ -129,8 +129,8 @@ func main() {
 				fmt.Println(decrypted)
 				return
 			}
-			fmt.Printf("Password \"%s\" was not found.", os.Args[2])
 		}
+		fmt.Printf("Password \"%s\" was not found.", os.Args[2])
 	case "lst":
 		res, err := client.ListPasswords(clientConfig)
 		if err != nil {
