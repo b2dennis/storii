@@ -155,7 +155,14 @@ func (phm *PasswordHandlerManager) SetPassword(w http.ResponseWriter, r *http.Re
 		AssociatedURL: setPasswordRequest.AssociatedURL,
 	}
 
-	result := phm.dbm.Db.Create(newPassword)
+	var existing models.StoredPassword
+	result := phm.dbm.Db.Where("user_id = ? AND name = ?", UserID, setPasswordRequest.Name).First(&existing)
+	if result.RowsAffected > 0 {
+		newPassword.ID = existing.ID
+		result = phm.dbm.Db.Save(newPassword)
+	} else {
+		result = phm.dbm.Db.Create(newPassword)
+	}
 	if result.RowsAffected == 0 {
 		phm.responseWriter.WriteErrorResponse(r.Context(), w, http.StatusInternalServerError, constants.ErrorCreationFailed, "Could not create password")
 		return
