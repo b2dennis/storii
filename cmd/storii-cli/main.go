@@ -149,9 +149,10 @@ func printUsage() {
 	fmt.Println("Usage:")
 	fmt.Println("storii init")
 	fmt.Println("storii lst")
-	fmt.Println("storii set {name} {password}")
-	fmt.Println("storii del {name}")
-	fmt.Println("storii gen {name}")
+	fmt.Println("storii get <name>")
+	fmt.Println("storii del <name>")
+	fmt.Println("storii gen <name>")
+	fmt.Println("storii set <name> <password>")
 }
 
 func initConfig() (config.ClientConfig, error) {
