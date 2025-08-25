@@ -12,6 +12,7 @@ import (
 	"github.com/b2dennis/storii/internal/config"
 	"github.com/b2dennis/storii/internal/crypto"
 	"github.com/b2dennis/storii/internal/models"
+	"golang.design/x/clipboard"
 	"golang.org/x/term"
 )
 
@@ -42,6 +43,12 @@ func main() {
 
 	var err error
 	var conf config.ClientConfig
+	clipboardAvailable := true
+
+	err = clipboard.Init()
+	if err != nil {
+		clipboardAvailable = false
+	}
 
 	if os.Args[1] != "init" {
 		conf, err = config.LoadClientConfig(configFile)
@@ -112,7 +119,14 @@ func main() {
 			fmt.Printf("Failed to set password: %v\n", err)
 			return
 		}
-		fmt.Printf("Successfully set password \"%s\" to \"%s\".\n", res.NewPassword.Name, password)
+		fmt.Printf("Successfully set password \"%s\".\n", res.NewPassword.Name)
+		if clipboardAvailable {
+			clipboard.Write(clipboard.FmtText, []byte(password))
+			fmt.Println("Password copied to your clipboard.")
+		} else {
+			fmt.Println(password)
+		}
+
 	case "get":
 		res, err := client.ListPasswords(clientConfig)
 		if err != nil {
@@ -126,7 +140,12 @@ func main() {
 					fmt.Println("Couldn't decrypt password")
 					return
 				}
-				fmt.Println(decrypted)
+				if clipboardAvailable {
+					clipboard.Write(clipboard.FmtText, []byte(decrypted))
+					fmt.Println("Password copied to your clipboard.")
+				} else {
+					fmt.Println(decrypted)
+				}
 				return
 			}
 		}
