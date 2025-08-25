@@ -710,7 +710,7 @@ func TestGetPasswords(t *testing.T) {
 	}
 }
 
-func TestAddPassword(t *testing.T) {
+func TestSetPassword(t *testing.T) {
 	conf := setupTestConfig()
 	jwtService := setupJWTService(conf)
 	logger := logging.NewLogger(conf)
@@ -746,19 +746,6 @@ func TestAddPassword(t *testing.T) {
 			},
 			expectedStatus: http.StatusCreated,
 			expectError:    false,
-		},
-		{
-			name: "Duplicate password name",
-			requestBody: models.SetPasswordC2S{
-				Name:          "newpassword",
-				Value:         hex.EncodeToString(value),
-				IV:            hex.EncodeToString(iv),
-				AuthTag:       hex.EncodeToString(authTag),
-				Salt:          hex.EncodeToString(salt),
-				AssociatedURL: "https://example.com",
-			},
-			expectedStatus: http.StatusBadRequest,
-			expectError:    true,
 		},
 		{
 			name: "Invalid hex data",

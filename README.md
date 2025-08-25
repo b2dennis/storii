@@ -1,9 +1,7 @@
-# Password Manager API (pwman-api)
-
-A secure, self-hostable password manager API written in Go. This project provides a backend service for storing and managing encrypted passwords with JWT-based authentication.
+# storii
+A secure, self-hostable password manager written in Go. This project provides a backend service for storing and managing encrypted passwords with JWT-based authentication and a basic CLI client.
 
 ## 🔐 Security Model
-
 **Important**: This is a toy project and should not be used for production password storage without thorough security review.
 
 ### Client-Side Encryption
@@ -26,11 +24,9 @@ All passwords are encrypted **before** being sent to the API using:
 
 ### Prerequisites
 - Go 1.24.5 or later
-- CGO enabled (required for SQLite)
-- GCC compiler (for CGO)
+- Just 1.42.4 or later
 
 ### Installation
-
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
@@ -42,21 +38,26 @@ All passwords are encrypted **before** being sent to the API using:
    go mod download
    ```
 
-3. **Build the application**
+3. **Build all targets**
    ```bash
-   go build -o pwman-api
+   just
    ```
 
 4. **Run the server**
    ```bash
-   ./pwman-api
+   ./build/bin/storii-api{.exe}
    ```
 
 The server will start on `http://localhost:9999` by default.
 
-## ⚙️ Configuration
+5. **Configure the client**
+  ```bash
+  ./build/bin/storii-client{.exe} init
+  ```
+This will launch an interactive setup.
 
-Configure the application using environment variables:
+## ⚙️ Configuration
+Configure the server using environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -69,10 +70,10 @@ Configure the application using environment variables:
 ### Example with custom configuration:
 ```bash
 export ADDRESS=":8080"
-export DBPATH="/var/lib/pwman/passwords.db"
+export DBPATH="/var/lib/storii/passwords.db"
 export JWTSECRET="your-super-secure-secret-here"
 export JWTEXPIRY="48"
-./pwman-api
+./storii
 ```
 
 ### Using .env file:
@@ -143,9 +144,9 @@ GET /password
 Authorization: Bearer <token>
 ```
 
-#### Add a new password
+#### Set a password
 ```http
-POST /password/create
+POST /password/set
 Authorization: Bearer <token>
 Content-Type: application/json
 
@@ -194,20 +195,20 @@ See `openapi.yaml` for the complete OpenAPI 3.0 specification with detailed sche
 
 ### Build Docker image
 ```bash
-docker build -t pwman-api .
+docker build -t storii-api .
 ```
 
 ### Run with Docker
 ```bash
 # Basic run
-docker run -p 9999:9999 pwman-api
+docker run -p 9999:9999 storii-api
 
 # With persistent data and custom config
 docker run -p 9999:9999 \
   -v $(pwd)/data:/app/data \
   -e JWTSECRET=your-secret-here \
   -e JWTEXPIRY=48 \
-  pwman-api
+  storii-api
 ```
 
 ### Production considerations
@@ -219,46 +220,19 @@ docker run -p 9999:9999 \
 
 ## 🏗️ Development
 
-### Project Structure
-```
-pwman-api/
-├── main.go              # Application entry point
-├── auth.go              # JWT authentication logic
-├── middleware.go        # HTTP middleware (logging, rate limiting)
-├── user_handlers.go     # User management endpoints
-├── password_handlers.go # Password management endpoints
-├── types.go             # Data structures and models
-├── validation.go        # Input validation rules
-├── util.go              # Utility functions
-├── constants.go         # Application constants
-├── openapi.yaml         # API documentation
-├── go.mod              # Go module definition
-└── README.md           # This file
-```
-
-### Adding new features
-1. Define new types in `types.go`
-2. Add validation rules in `validation.go`
-3. Create handlers in appropriate `*_handlers.go` file
-4. Register routes in `main.go`
-5. Update `openapi.yaml` documentation
-
 ### Testing
 ```bash
 # Run all tests
-go test ./...
+just test
 
 # Run tests with coverage
-go test -cover ./...
+just test -cover
 
 # Run tests with verbose output
-go test -v ./...
-
-# Run specific test function
-go test -run TestFunctionName
+just test -v
 
 # Run benchmarks
-go test -bench=.
+just test -bench=.
 ```
 
 #### Test Coverage Includes
