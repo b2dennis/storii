@@ -1,9 +1,8 @@
-# AI Generated
 openapi: 3.0.3
 info:
-  title: Password Manager API
+  title: Storii API
   description: |
-    A self-hostable password manager API written in Go. This API provides secure storage and management of encrypted passwords with user authentication via JWT tokens.
+    A self-hostable secret manager API written in Go. This API provides secure storage and management of encrypted passwords with user authentication via JWT tokens.
     
     ## Security Model
     - All stored passwords are client-side encrypted using AES-GCM with Argon2 key derivation
@@ -18,7 +17,7 @@ info:
     - Argon2 salt (16 bytes, hex-encoded)
   version: 1.0.0
   contact:
-    name: Dennis
+    name: Dennis Winghardt
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
@@ -230,18 +229,18 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
-  /password/create:
+  /password/set:
     post:
       tags:
         - Password Management
-      summary: Add a new password
-      description: Stores a new encrypted password for the authenticated user
+      summary: Set a password
+      description: Stores an encrypted password for the authenticated user
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AddPasswordRequest'
+              $ref: '#/components/schemas/SetPasswordRequest'
             example:
               name: "github"
               value: "a1b2c3d4e5f6789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
@@ -404,7 +403,7 @@ components:
     UpdateUserRequest:
       $ref: '#/components/schemas/CreateUserRequest'
 
-    AddPasswordRequest:
+    SetPasswordRequest:
       type: object
       required:
         - name
@@ -448,7 +447,7 @@ components:
 
     UpdatePasswordRequest:
       allOf:
-        - $ref: '#/components/schemas/AddPasswordRequest'
+        - $ref: '#/components/schemas/SetPasswordRequest'
         - type: object
           required:
             - new_name
