@@ -13,6 +13,7 @@ import (
 	"github.com/b2dennis/storii/internal/models"
 )
 
+// Generates a plaintext password from Google's permitted chars.
 func GeneratePassword(n int) string {
 	permittedChars := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*.()")
 	retVal := make([]rune, n)
@@ -23,6 +24,7 @@ func GeneratePassword(n int) string {
 	return string(retVal)
 }
 
+// Reads a response message. If the response is SuccessS2C it puts the data into target. Otherwise it returns an error.
 func ReadResponse(data []byte, target any) error {
 	var res models.SuccessS2C
 	err := json.Unmarshal(data, &res)

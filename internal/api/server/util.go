@@ -9,16 +9,19 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// Helper struct to initialize util handlers.
 type UtilHandlerManager struct {
 	logger *slog.Logger
 }
 
+// Constructor for UtilHandlerManager
 func NewUtilHandlerManager(logger *slog.Logger) *UtilHandlerManager {
 	return &UtilHandlerManager{
 		logger: logger,
 	}
 }
 
+// Helper to register all util handlers.
 func (uhm *UtilHandlerManager) RegisterUtilHandlers(r *mux.Router) {
 	var utilHandlers []models.RequestHandlerStruct = []models.RequestHandlerStruct{
 		{
@@ -36,6 +39,7 @@ func (uhm *UtilHandlerManager) RegisterUtilHandlers(r *mux.Router) {
 	}
 }
 
+// Handler that just returns a success response.
 func Ping(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(constants.PingRouteSuccessResponse))
 }

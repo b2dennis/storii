@@ -18,6 +18,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// Helper struct to initalize user handlers.
 type UserHandlerManager struct {
 	jwt            *middleware.JWT
 	jwtService     *auth.JWTService
@@ -27,6 +28,7 @@ type UserHandlerManager struct {
 	dbm            *db.DbManager
 }
 
+// Constructor for UserHandlerManager.
 func NewUserHandlerManager(jwt *middleware.JWT, jwtService *auth.JWTService, logger *slog.Logger, responseWriter *utils.ResponseWriter, validator *validation.Validator, dbm *db.DbManager) *UserHandlerManager {
 	return &UserHandlerManager{
 		jwt:            jwt,
@@ -38,6 +40,7 @@ func NewUserHandlerManager(jwt *middleware.JWT, jwtService *auth.JWTService, log
 	}
 }
 
+// Helper to register all user handlers.
 func (uhm *UserHandlerManager) RegisterUserHandlers(r *mux.Router) {
 	var userHandlers []models.RequestHandlerStruct = []models.RequestHandlerStruct{
 		{
@@ -70,6 +73,7 @@ func (uhm *UserHandlerManager) RegisterUserHandlers(r *mux.Router) {
 	}
 }
 
+// Handler to create a new user.
 func (uhm *UserHandlerManager) CreateUser(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
@@ -122,6 +126,7 @@ func (uhm *UserHandlerManager) CreateUser(w http.ResponseWriter, r *http.Request
 	uhm.responseWriter.WriteSuccessResponse(r.Context(), w, response, http.StatusCreated)
 }
 
+// Handler to login an existing user.
 func (uhm *UserHandlerManager) LoginUser(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
@@ -168,6 +173,7 @@ func (uhm *UserHandlerManager) LoginUser(w http.ResponseWriter, r *http.Request)
 	uhm.responseWriter.WriteSuccessResponse(r.Context(), w, response)
 }
 
+// Handler to delete an existing user.
 func (uhm *UserHandlerManager) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	userIDStr := r.Header.Get(constants.AuthHeaderUserID)
 	UserID, err := strconv.ParseUint(userIDStr, 10, 64)
@@ -193,6 +199,7 @@ func (uhm *UserHandlerManager) DeleteUser(w http.ResponseWriter, r *http.Request
 	uhm.responseWriter.WriteSuccessResponse(r.Context(), w, response)
 }
 
+// Handler to update an existing user.
 func (uhm *UserHandlerManager) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 

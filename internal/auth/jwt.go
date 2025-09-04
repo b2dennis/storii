@@ -10,14 +10,17 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// Helper struct to keep JWT state.
 type JWTService struct {
 	config *config.ServerConfig
 }
 
+// Constructor for JWTService.
 func NewJWTService(cfg *config.ServerConfig) *JWTService {
 	return &JWTService{config: cfg}
 }
 
+// Generates a new JWT token for a given user.
 func (j *JWTService) GenerateJWT(user models.User) (string, error) {
 	expirationTime := time.Now().Add(j.config.JWTExpiry)
 	claims := &Claims{
@@ -33,6 +36,7 @@ func (j *JWTService) GenerateJWT(user models.User) (string, error) {
 	return token.SignedString([]byte(j.config.JWTSecret))
 }
 
+// Validates a given JWT tokenString.
 func (j *JWTService) ValidateJWT(tokenString string) (*Claims, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
@@ -50,6 +54,7 @@ func (j *JWTService) ValidateJWT(tokenString string) (*Claims, error) {
 	return claims, nil
 }
 
+// Additional information for JWT validation.
 type Claims struct {
 	UserID   uint   `json:"user_id"`
 	Username string `json:"username"`

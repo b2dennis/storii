@@ -1,3 +1,4 @@
+// A package containing all API handlers.
 package handlers
 
 import (
@@ -17,6 +18,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// Helper struct to initialize password handlers.
 type PasswordHandlerManager struct {
 	jwt            *middleware.JWT
 	logger         *slog.Logger
@@ -25,6 +27,7 @@ type PasswordHandlerManager struct {
 	dbm            *db.DbManager
 }
 
+// Constructor for PasswordHandlerManager.
 func NewPasswordHandlerManager(jwt *middleware.JWT, logger *slog.Logger, responseWriter *utils.ResponseWriter, validator *validation.Validator, dbm *db.DbManager) *PasswordHandlerManager {
 	return &PasswordHandlerManager{
 		jwt:            jwt,
@@ -35,6 +38,7 @@ func NewPasswordHandlerManager(jwt *middleware.JWT, logger *slog.Logger, respons
 	}
 }
 
+// Helper to register all password handlers.
 func (phm *PasswordHandlerManager) RegisterPasswordHandlers(r *mux.Router) {
 	var passwordHandlers []models.RequestHandlerStruct = []models.RequestHandlerStruct{
 		{
@@ -66,6 +70,7 @@ func (phm *PasswordHandlerManager) RegisterPasswordHandlers(r *mux.Router) {
 	}
 }
 
+// Handler to get all stored passwords.
 func (phm *PasswordHandlerManager) GetPasswords(w http.ResponseWriter, r *http.Request) {
 	userIDStr := r.Header.Get(constants.AuthHeaderUserID)
 	UserID, err := strconv.ParseUint(userIDStr, 10, 64)
@@ -98,6 +103,7 @@ func (phm *PasswordHandlerManager) GetPasswords(w http.ResponseWriter, r *http.R
 	phm.responseWriter.WriteSuccessResponse(r.Context(), w, response, http.StatusOK)
 }
 
+// Handler to set a specific password.
 func (phm *PasswordHandlerManager) SetPassword(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
@@ -183,6 +189,7 @@ func (phm *PasswordHandlerManager) SetPassword(w http.ResponseWriter, r *http.Re
 	phm.responseWriter.WriteSuccessResponse(r.Context(), w, response, http.StatusCreated)
 }
 
+// Handler to delete a specific password.
 func (phm *PasswordHandlerManager) DeletePassword(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
@@ -227,6 +234,7 @@ func (phm *PasswordHandlerManager) DeletePassword(w http.ResponseWriter, r *http
 	phm.responseWriter.WriteSuccessResponse(r.Context(), w, response)
 }
 
+// Handler to update a specific password.
 func (phm *PasswordHandlerManager) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 

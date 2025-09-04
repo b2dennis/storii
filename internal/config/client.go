@@ -11,12 +11,14 @@ import (
 	"github.com/b2dennis/storii/internal/constants"
 )
 
+// Struct holding necessary client information.
 type ClientConfig struct {
 	Remote   string `json:"api_address"`
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
+// Helper function to load a ClientConfig from a file.
 func LoadClientConfig(configFile string) (ClientConfig, error) {
 	dat, err := os.ReadFile(configFile)
 	if err != nil {
@@ -34,6 +36,7 @@ func LoadClientConfig(configFile string) (ClientConfig, error) {
 	return conf, nil
 }
 
+// Validates the remote by checking the ping endpoint.
 func IsRemoteValid(remote string) bool {
 	req, err := http.NewRequest(http.MethodGet, remote+constants.RouteUtil+constants.UtilRoutePing, bytes.NewReader([]byte{}))
 	if err != nil {
