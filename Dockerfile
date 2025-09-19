@@ -1,4 +1,3 @@
-# AI Generated
 # Build stage
 FROM golang:1.24-alpine AS builder
 
@@ -15,12 +14,14 @@ RUN go mod download
 COPY . .
 
 # Build the application
-# CGO is enabled by default, but we'll be explicit
-# Static linking for better portability
-RUN go build cmd/storii-api -a -ldflags '-linkmode external -extldflags "-static"' -o storii-api .
+# Static binary without CGO
+RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-w -s' -o storii-api ./cmd/storii-api
 
 # Runtime stage
 FROM alpine:latest AS runtime
+
+# Install wget for health check
+RUN apk add --no-cache wget
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S appgroup && \
