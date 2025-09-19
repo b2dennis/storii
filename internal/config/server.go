@@ -11,13 +11,13 @@ import (
 )
 
 func LoadServerConfig() *ServerConfig {
-	expiryHours, err := strconv.Atoi(getEnv(constants.VarJWTExpiry, "24"))
+	expiryHours, err := strconv.Atoi(getEnv(constants.VarJWTExpiry, constants.DefaultJWTExpiry))
 	if err != nil {
 		fmt.Printf("Value %s for env var %s is invalid! Must be an integer.", os.Getenv(constants.VarJWTExpiry), constants.VarJWTExpiry)
 		expiryHours = 24
 	}
 	var logOutput io.Writer
-	switch strings.ToLower(getEnv(constants.VarLogOutput, "stdout")) {
+	switch strings.ToLower(getEnv(constants.VarLogOutput, constants.DefaultLogOutput)) {
 	case "stdout":
 		logOutput = os.Stdout
 	case "stderr":
@@ -28,11 +28,14 @@ func LoadServerConfig() *ServerConfig {
 	}
 
 	return &ServerConfig{
-		Address:   getEnv(constants.VarAddress, ":9999"),
-		DBPath:    getEnv(constants.VarDBPath, "data.db"),
-		JWTSecret: getEnv(constants.VarJWTSecret, "b2dennis"),
+		Address:   getEnv(constants.VarAddress, constants.DefaultAddress),
+		JWTSecret: getEnv(constants.VarJWTSecret, constants.DefaultJWTSecret),
 		JWTExpiry: time.Duration(expiryHours) * time.Hour,
 		LogOutput: logOutput,
+		DBHost:    getEnv(constants.VarDBHost, constants.DefaultDBHost),
+		DBPort:    getEnv(constants.VarDBPort, constants.DefaultDBPort),
+		DBUser:    getEnv(constants.VarDBUser, constants.DefaultDBUser),
+		DBPass:    getEnv(constants.VarDBPass, constants.DefaultDBPass),
 	}
 }
 
@@ -46,7 +49,10 @@ func getEnv(key, defaultValue string) string {
 
 type ServerConfig struct {
 	Address   string
-	DBPath    string
+	DBHost    string
+	DBPort    string
+	DBUser    string
+	DBPass    string
 	JWTSecret string
 	JWTExpiry time.Duration
 	LogOutput io.Writer
