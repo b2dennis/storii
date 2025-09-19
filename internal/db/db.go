@@ -15,7 +15,7 @@ type DbManager struct {
 }
 
 func NewDbManager(config *config.ServerConfig) *DbManager {
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=\"Europe/Zurich\"", config.DBHost, config.DBUser, config.DBPass, config.DBName, config.DBPort)
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Europe/Zurich", config.DBHost, config.DBUser, config.DBPass, config.DBName, config.DBPort)
 	Db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
