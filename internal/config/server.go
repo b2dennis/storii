@@ -33,6 +33,7 @@ func LoadServerConfig() *ServerConfig {
 		JWTExpiry: time.Duration(expiryHours) * time.Hour,
 		LogOutput: logOutput,
 		DBHost:    getEnv(constants.VarDBHost, constants.DefaultDBHost),
+		DBName:    getEnv(constants.VarDBName, constants.DefaultDBName),
 		DBPort:    getEnv(constants.VarDBPort, constants.DefaultDBPort),
 		DBUser:    getEnv(constants.VarDBUser, constants.DefaultDBUser),
 		DBPass:    getEnv(constants.VarDBPass, constants.DefaultDBPass),
@@ -50,6 +51,7 @@ func getEnv(key, defaultValue string) string {
 type ServerConfig struct {
 	Address   string
 	DBHost    string
+	DBName    string
 	DBPort    string
 	DBUser    string
 	DBPass    string

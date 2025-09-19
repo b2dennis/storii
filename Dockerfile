@@ -17,7 +17,7 @@ COPY . .
 # Build the application
 # CGO is enabled by default, but we'll be explicit
 # Static linking for better portability
-RUN go build -a -ldflags '-linkmode external -extldflags "-static"' -o storii-api .
+RUN go build cmd/storii-api -a -ldflags '-linkmode external -extldflags "-static"' -o storii-api .
 
 # Runtime stage
 FROM alpine:latest AS runtime
@@ -45,12 +45,6 @@ EXPOSE 9999
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:9999/util/ping || exit 1
-
-# Set default environment variables
-ENV ADDRESS=:9999
-ENV DBPATH=/app/data/data.db
-ENV JWTEXPIRY=24
-ENV LOGOUTPUT=stdout
 
 # Run the application
 CMD ["./storii-api"]
