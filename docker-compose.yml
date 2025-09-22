@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: storii-postgres
+    environment:
+      POSTGRES_DB: storii
+      POSTGRES_USER: storii_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-storii_secure_password}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - storii-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U storii_user -d storii"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  storii-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: storii-api
+    environment:
+      # Server Configuration
+      ADDRESS: ":9999"
+      JWTSECRET: ${JWT_SECRET:-change-this-jwt-secret-in-production-make-it-very-long-and-secure}
+      JWTEXPIRY: ${JWT_EXPIRY:-24}
+      LOGOUTPUT: "stdout"
+
+      # Database Configuration
+      DBHOST: "postgres"
+      DBNAME: "storii"
+      DBPORT: "5432"
+      DBUSER: "storii_user"
+      DBPASS: ${DB_PASSWORD:-storii_secure_password}
+    ports:
+      - "9999:9999"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - storii-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/util/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  storii-network:
+    driver: bridge
