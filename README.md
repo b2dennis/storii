@@ -1,5 +1,5 @@
 # storii
-A secure, self-hostable password manager written in Go. This project provides a backend service for storing and managing encrypted passwords with JWT-based authentication and a basic CLI client.
+A secure, self-hostable password manager written in Go. This project provides a backend service for storing and managing encrypted passwords with JWT-based authentication, and a basic CLI client as a reference implementation.
 
 ## 🔐 Security Model
 **Important**: This is a toy project and should not be used for production password storage without thorough security review.
@@ -25,12 +25,13 @@ All passwords are encrypted **before** being sent to the API using:
 ### Prerequisites
 - Go 1.24.5 or later
 - Just 1.42.4 or later
+- A PostgreSQL database
 
 ### Installation
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
-   cd pwman-api
+   git clone https://github.com/b2dennis/storii
+   cd storii
    ```
 
 2. **Install dependencies**
@@ -48,7 +49,7 @@ All passwords are encrypted **before** being sent to the API using:
    ./build/bin/storii-api{.exe}
    ```
 
-The server will start on `http://localhost:9999` by default.
+The server will start on `http://0.0.0.0:9999` by default.
 
 5. **Configure the client**
   ```bash
@@ -62,25 +63,27 @@ Configure the server using environment variables:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ADDRESS` | `:9999` | Server bind address and port |
-| `DBPATH` | `data.db` | SQLite database file path |
 | `JWTSECRET` | `b2dennis` | JWT signing secret ⚠️ **Change in production!** |
 | `JWTEXPIRY` | `24` | JWT token expiry in hours |
 | `LOGOUTPUT` | `stdout` | Log output (`stdout`, `stderr`) |
+| `DBHOST` | `localhost` | PostgreSQL database URL |
+| `DBNAME` | `postgres` | PostgreSQL database name |
+| `DBPORT` | `5432` | PostgreSQL database port |
+| `DBUSER` | `default_user` | PostgreSQL database user |
+| `DBPASS` | `default_pass` | PostgreSQL database password ⚠️ **Change in production!** |
 
 ### Example with custom configuration:
 ```bash
 export ADDRESS=":8080"
-export DBPATH="/var/lib/storii/passwords.db"
 export JWTSECRET="your-super-secure-secret-here"
 export JWTEXPIRY="48"
-./storii
+./storii-api
 ```
 
 ### Using .env file:
 Create a `.env` file in the project root:
 ```env
 ADDRESS=:8080
-DBPATH=./data/passwords.db
 JWTSECRET=your-super-secure-secret-here
 JWTEXPIRY=48
 LOGOUTPUT=stdout
@@ -92,6 +95,16 @@ LOGOUTPUT=stdout
 All password-related endpoints require JWT authentication. Include the token in the `Authorization` header:
 ```
 Authorization: Bearer <your-jwt-token>
+```
+
+### Util
+
+#### Ping
+```
+POST /util/ping
+Content-Type: application/json
+
+Returns 200 OK on success
 ```
 
 ### User Management
@@ -210,6 +223,9 @@ docker run -p 9999:9999 \
   -e JWTEXPIRY=48 \
   storii-api
 ```
+
+### Docker Compose
+A docker compose example is available (`docker-compose.yml`)
 
 ### Production considerations
 - **Always change the JWT secret** in production

@@ -8,10 +8,7 @@ type CreateUserC2S struct {
 	Password string `json:"password" validate:"required,min=12,max=72,password_strength"`
 }
 
-type LoginC2S struct {
-	Username string `json:"username" validate:"required,min=4,max=32,username_format"`
-	Password string `json:"password" validate:"required,min=12,max=72,password_strength"`
-}
+type LoginC2S = CreateUserC2S
 
 type UpdateUserC2S = CreateUserC2S
 
