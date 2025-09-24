@@ -100,8 +100,8 @@ Authorization: Bearer <your-jwt-token>
 ### Util
 
 #### Ping
-```
-POST /util/ping
+```http
+GET /util/ping
 Content-Type: application/json
 
 Returns 200 OK on success
