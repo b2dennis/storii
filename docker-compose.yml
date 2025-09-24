@@ -1,10 +1,11 @@
 services:
+  # Postgres DB for data - could also be hosted externally
   postgres:
     image: postgres:15-alpine
     container_name: storii-postgres
     environment:
-      POSTGRES_DB: storii
-      POSTGRES_USER: storii_user
+      POSTGRES_DB: ${DBNAME:-storii}
+      POSTGRES_USER: ${DBUSER:-storii_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-storii_secure_password}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
@@ -19,25 +20,20 @@ services:
     restart: unless-stopped
 
   storii-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/b2dennis/storii-api:latest
     container_name: storii-api
     environment:
-      # Server Configuration
-      ADDRESS: ":9999"
       JWTSECRET: ${JWT_SECRET:-change-this-jwt-secret-in-production-make-it-very-long-and-secure}
       JWTEXPIRY: ${JWT_EXPIRY:-24}
-      LOGOUTPUT: "stdout"
+      LOGOUTPUT: ${LOGOUTPUT:-stdout}
+      ADDRESS: ${ADDRESS:-:9999}
 
       # Database Configuration
-      DBHOST: "postgres"
-      DBNAME: "storii"
-      DBPORT: "5432"
-      DBUSER: "storii_user"
+      DBHOST: ${DBHOST:-postgres}
+      DBNAME: ${DBNAME:-storii}
+      DBPORT: ${DBPORT:-5432}
+      DBUSER: ${DBUSER:-storii_user}
       DBPASS: ${DB_PASSWORD:-storii_secure_password}
-    ports:
-      - "9999:9999"
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,7 +41,7 @@ services:
       - storii-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/util/ping"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "http://localhost${ADDRESS:-:9999}/util/ping"]
       interval: 30s
       timeout: 10s
       retries: 3
