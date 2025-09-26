@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -17,7 +19,19 @@ import (
 	"golang.org/x/term"
 )
 
-const configFile = "conf.json"
+var configFile = func() string {
+  home, _ := os.UserHomeDir()
+  var path string
+  switch runtime.GOOS {
+  case "windows":
+    path = filepath.Join(os.Getenv("APPDATA"), "storii", "config.json")
+  case "linux":
+    path = filepath.Join(home, ".config", "storii", "config.json")
+  default:
+    path = filepath.Join(home, ".storii")
+  }
+  return path
+}()
 
 func main() {
 	if len(os.Args) < 2 {
@@ -45,6 +59,12 @@ func main() {
 			return
 		}
 		jsonData, _ := json.Marshal(conf)
+		dir := filepath.Dir(configFile)
+		err = os.MkdirAll(dir, 0755)
+		if err != nil {
+                  fmt.Printf("Failed to create directory: %v\n", err)
+		  return
+		}
 		file, err := os.Create(configFile)
 		if err != nil {
 			fmt.Printf("Failed to create config file: %v\n", err)
