@@ -13,9 +13,10 @@ import (
 
 // Struct holding necessary client information.
 type ClientConfig struct {
-	Remote   string `json:"api_address"`
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Remote    string `json:"api_address"`
+	Username  string `json:"username"`
+	Password  string `json:"password"`
+	ExitDelay int    `json:"exit_delay"`
 }
 
 // Helper function to load a ClientConfig from a file.

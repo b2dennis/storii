@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/b2dennis/storii/internal/api/client"
 	"github.com/b2dennis/storii/internal/config"
@@ -20,17 +21,17 @@ import (
 )
 
 var configFile = func() string {
-  home, _ := os.UserHomeDir()
-  var path string
-  switch runtime.GOOS {
-  case "windows":
-    path = filepath.Join(os.Getenv("APPDATA"), "storii", "config.json")
-  case "linux":
-    path = filepath.Join(home, ".config", "storii", "config.json")
-  default:
-    path = filepath.Join(home, ".storii")
-  }
-  return path
+	home, _ := os.UserHomeDir()
+	var path string
+	switch runtime.GOOS {
+	case "windows":
+		path = filepath.Join(os.Getenv("APPDATA"), "storii", "config.json")
+	case "linux":
+		path = filepath.Join(home, ".config", "storii", "config.json")
+	default:
+		path = filepath.Join(home, ".storii")
+	}
+	return path
 }()
 
 func main() {
@@ -62,8 +63,8 @@ func main() {
 		dir := filepath.Dir(configFile)
 		err = os.MkdirAll(dir, 0755)
 		if err != nil {
-                  fmt.Printf("Failed to create directory: %v\n", err)
-		  return
+			fmt.Printf("Failed to create directory: %v\n", err)
+			return
 		}
 		file, err := os.Create(configFile)
 		if err != nil {
@@ -127,10 +128,10 @@ func main() {
 		if clipboardAvailable {
 			clipboard.Write(clipboard.FmtText, []byte(password))
 			fmt.Println("Password copied to your clipboard.")
+			time.Sleep(time.Duration(conf.ExitDelay) * time.Second)
 		} else {
 			fmt.Println(password)
 		}
-
 	case "get":
 		res, err := client.ListPasswords(clientConfig)
 		if err != nil {
@@ -147,6 +148,7 @@ func main() {
 				if clipboardAvailable {
 					clipboard.Write(clipboard.FmtText, []byte(decrypted))
 					fmt.Println("Password copied to your clipboard.")
+					time.Sleep(time.Duration(conf.ExitDelay) * time.Second)
 				} else {
 					fmt.Println(decrypted)
 				}
@@ -213,9 +215,10 @@ func initConfig() (config.ClientConfig, error) {
 	}
 
 	return config.ClientConfig{
-		Remote:   remote,
-		Username: username,
-		Password: password,
+		Remote:    remote,
+		Username:  username,
+		Password:  password,
+		ExitDelay: 10,
 	}, nil
 }
 
