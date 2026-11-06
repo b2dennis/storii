@@ -17,7 +17,7 @@ services:
     restart: unless-stopped
 
   storii-api:
-    image: ghcr.io/b2dennis/storii-api:latest
+    image: ghcr.io/b2dennis/storii-api:2
     build: .
     environment:
       ADDRESS: ":9999"

@@ -57,8 +57,35 @@ android:
 vectors:
   go test ./internal/vault -update
 
-image:
-  docker build -t ghcr.io/b2dennis/storii-api:latest .
+# Server image for linux/amd64 and arm64 with ko (no Docker needed), pushed as :<version> and :2.
+# Deliberately not :latest, which v1 installs still pull.
+image version="2.0.0":
+  gh auth token | ko login ghcr.io -u b2dennis --password-stdin
+  KO_DOCKER_REPO=ghcr.io/b2dennis/storii-api ko build --bare --platform linux/amd64,linux/arm64 --tags {{version}},2 ./cmd/storii-api
+
+# Release files in build/dist: CLI and server for Linux and macOS, the Windows tray app and CLI, the extensions and
+# the Android APK (signed with this machine's debug key, so keep ~/.android/debug.keystore for updates)
+dist version="2.0.0": windows extension
+  #!/usr/bin/env bash
+  set -euo pipefail
+  rm -rf build/dist && mkdir -p build/dist
+  for t in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+    os=${t%/*}; arch=${t#*/}; d=build/stage/storii-{{version}}-$os-$arch; rm -rf $d; mkdir -p $d
+    GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' -o $d/storii ./cmd/storii
+    GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' -o $d/storii-api ./cmd/storii-api
+    cp LICENSE README.md $d/
+    tar -C build/stage -czf build/dist/storii-{{version}}-$os-$arch.tar.gz storii-{{version}}-$os-$arch
+  done
+  for arch in amd64 arm64; do
+    d=build/stage/storii-{{version}}-windows-$arch; rm -rf $d; mkdir -p $d
+    cp {{BUILD_DIR}}/windows-$arch/storii-tray.exe {{BUILD_DIR}}/windows-$arch/storii.exe LICENSE README.md $d/
+    (cd build/stage && zip -qr ../dist/storii-{{version}}-windows-$arch.zip storii-{{version}}-windows-$arch)
+  done
+  (cd extension/dist/chrome && zip -qr ../../../build/dist/storii-{{version}}-chrome.zip .)
+  (cd extension/dist/firefox && zip -qr ../../../build/dist/storii-{{version}}-firefox.zip .)
+  (cd android && ./gradlew -q assembleRelease) && cp android/app/build/outputs/apk/release/app-release.apk build/dist/storii-{{version}}.apk
+  rm -rf build/stage
+  cd build/dist && sha256sum * > SHA256SUMS
 
 clean:
   rm -rf {{BUILD_DIR}} extension/dist

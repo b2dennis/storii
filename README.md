@@ -73,7 +73,10 @@ database and migrate in place.
 
 ## Clients
 
-**CLI**
+Ready-made builds of the CLI, the server, the Windows tray app, the browser extensions and the Android app are on the
+[releases page](https://github.com/b2dennis/storii/releases/latest). The server image is `ghcr.io/b2dennis/storii-api:2` (`:latest` is still v1).
+
+**CLI** (or the `storii` binary from a release)
 
 ```sh
 go install github.com/b2dennis/storii/cmd/storii@latest
@@ -86,11 +89,12 @@ storii ls --site gist.github.com
 storii help
 ```
 
-**Browser extension**: `just extension`, then load `extension/dist/chrome` (chrome://extensions, Developer mode,
-"Load unpacked") or `extension/dist/firefox` (about:debugging). It shows an icon in login fields and fills 2FA
+**Browser extension**: unzip `storii-<version>-chrome.zip` from a release (or run `just extension` for
+`extension/dist/chrome`) and load it in chrome://extensions with Developer mode on, "Load unpacked". For Firefox,
+load `storii-<version>-firefox.zip` in about:debugging (it stays until Firefox restarts, as the add-on isn't signed). It shows an icon in login fields and fills 2FA
 fields. Ctrl+Shift+L fills the best match. After you sign in with a new password, it offers to save it.
 
-**Android** (10+): `just android` and install `android/app/build/outputs/apk/debug/app-debug.apk`. In the app's
+**Android** (10+): install `storii-<version>.apk` from a release (or build it with `just android`). In the app's
 settings, make storii the autofill service. In Chrome, also choose Settings › Autofill services › "Autofill using
 another service". Biometric unlock and QR scanning for 2FA are in the app.
 
@@ -101,7 +105,8 @@ keychain group `sh.base2.storii.shared`. Then turn on AutoFill from storii's set
 General › AutoFill & Passwords. On the Mac, storii also has a menu bar search: click a secret to copy it, ⌥-click for the
 username. 2FA QR codes are read from a pasted screenshot (⌃⇧⌘4) or an image file there.
 
-**Windows** (10+): `just windows` builds `build/bin/windows-amd64/storii-tray.exe` (and an ARM build). Run it, and
+**Windows** (10+): run `storii-tray.exe` from `storii-<version>-windows-amd64.zip` (or the ARM zip) in a release;
+`just windows` builds it too. It isn't code-signed, so SmartScreen asks once (More info › Run anyway). Run it, and
 log in from the window it opens (or use `storii login` first: they share the state file). Ctrl+Shift+Space opens
 the search from anywhere:
 
@@ -123,6 +128,8 @@ just test   # Go, extension, Android and iOS-core unit tests (and a Windows buil
 ios/mac-build              # iOS Simulator and macOS builds on a Mac, from a Linux box, via mac-run
 ios/mac-shots STATE PW     # iOS Simulator screenshots of a vault state file (debug builds)
 just e2e    # extension in Chromium against `just dev`, plus CLI interop and the Swift round trip
+just dist   # release files in build/dist (CLI and server tarballs, Windows zips, extension zips, APK, SHA256SUMS)
+just image  # server image to ghcr.io/b2dennis/storii-api:<version> and :2, with ko
 ```
 
 All clients implement the same format. When you change it, update `docs/CRYPTO.md`, edit the inputs in
