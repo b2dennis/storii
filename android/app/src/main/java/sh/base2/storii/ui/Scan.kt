@@ -26,6 +26,12 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.OutlinedButton
 import androidx.activity.result.PickVisualMediaRequest
 import android.content.Context
+import android.content.Intent
+import android.provider.Settings
+import androidx.core.app.ActivityCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.compose.foundation.layout.Arrangement
 import android.net.Uri
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -60,7 +66,15 @@ import java.util.concurrent.Executors
 fun ScanScreen(nav: NavController) {
     val ctx = LocalContext.current
     var granted by remember { mutableStateOf(ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
-    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
+    var refusals by remember { mutableStateOf(0) }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it; if (!it) refusals++ }
+    // Back from the system settings with the permission turned on.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(Unit) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            granted = ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        }
+    }
     var hint by remember { mutableStateOf("Point the camera at the QR code the site shows when you turn on 2FA.") }
     var done by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { if (!granted) ask.launch(Manifest.permission.CAMERA) }
@@ -102,7 +116,16 @@ fun ScanScreen(nav: NavController) {
             if (granted) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 QrCamera(::onCode)
                 Box(Modifier.size(240.dp).border(3.dp, Color.White, RoundedCornerShape(20.dp)))
-            } else Text("storii needs the camera to scan QR codes. You can also choose a screenshot of the QR code, or type the setup key instead.", Modifier.padding(16.dp))
+            } else Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("storii needs the camera to scan QR codes. You can also choose a screenshot of the QR code, or type the setup key instead.")
+                val activity = ctx as? android.app.Activity
+                // After two refusals Android stops asking; then only the app's system settings can turn it on.
+                val blocked = refusals > 0 && activity != null && !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.CAMERA)
+                OutlinedButton(onClick = {
+                    if (blocked) ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null)))
+                    else ask.launch(Manifest.permission.CAMERA)
+                }, Modifier.fillMaxWidth()) { Text(if (blocked) "Allow the camera in settings" else "Allow the camera") }
+            }
         }
     }
 }

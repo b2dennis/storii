@@ -54,6 +54,12 @@ Contexts (apps and websites; a secret can belong to several)
   storii ctx rm NAME
   storii ctx link SECRET CONTEXT     storii ctx unlink SECRET CONTEXT
 
+Importing from other password managers
+  storii import FILE [--dry-run]    logins from a CSV export of Google Password Manager (passwords.google.com,
+                                    Chrome, the Android app), Firefox, Bitwarden or 1Password; 2FA codes from an
+                                    Authy export (asks for the Authy backup password) or a list of otpauth:// links.
+                                    Safe to run twice.
+
 Moving from storii v1
   storii migrate --legacy-db POSTGRES_URL --legacy-user NAME [--dry-run] [--overwrite]
   storii migrate --legacy-server URL --legacy-user NAME [--dry-run] [--overwrite]
@@ -158,6 +164,8 @@ func run(ctx context.Context, args []string) error {
 		return cmdSessions(ctx, st)
 	case "migrate":
 		return cmdMigrate(ctx, v, rest)
+	case "import":
+		return cmdImport(ctx, v, rest)
 	}
 	return fmt.Errorf("unknown command %q (try storii help)", cmd)
 }

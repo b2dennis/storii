@@ -1,0 +1,29 @@
+{
+  "_comment": "authy.json is an Authy token export (the shape of the Authy API, GDPR exports and capture tools), encrypted with password; made with Python's hashlib and openssl, independent of the Go and Kotlin code. Shared by both tests.",
+  "password": "Authy-Backup-Pass-1",
+  "tokens": [
+    {
+      "name": "GitHub",
+      "issuer": "GitHub",
+      "account": "dennis@example.com",
+      "secret": "JBSWY3DPEHPK3PXP",
+      "digits": 6,
+      "context": "ctx-gh"
+    },
+    {
+      "name": "Proton",
+      "issuer": "Proton",
+      "account": "me@proton.me",
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "digits": 8
+    },
+    {
+      "name": "Example",
+      "issuer": "Example",
+      "account": "",
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "digits": 6,
+      "duplicate_of": 1
+    }
+  ]
+}

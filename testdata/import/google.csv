@@ -1,0 +1,11 @@
+name,url,username,password,note
+github.com,https://github.com/login,dennis,gh-pass,
+example.com,https://www.example.com/,alice,same,
+example.com,https://example.com,alice,newer,
+com.instagram.android,android://AbC12_-xYz==@com.instagram.android/,dennis_ig,ig-pass,"note, with comma"
+accounts.google.com,https://accounts.google.com/signin,me@gmail.com,"g""pass","two
+lines"
+accounts.google.com,https://accounts.google.com/,me@gmail.com,"g""pass",
+nopass.example,https://nopass.example/,someone,,
+Spotify,android://xyz@com.spotify.music/,s@x.ch,sp,
+intranet,,admin,secret,

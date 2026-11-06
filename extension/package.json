@@ -1,7 +1,7 @@
 {
   "name": "storii-extension",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
@@ -10,6 +10,8 @@
   },
   "devDependencies": {
     "hash-wasm": "4.12.0",
-    "playwright": "1.65.0"
+    "playwright": "1.65.0",
+    "puppeteer-core": "24.10.0",
+    "web-ext": "10.8.0"
   }
 }

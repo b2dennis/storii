@@ -124,7 +124,7 @@ def coff(machine, reloc_type, section, relocs):
     return out + struct.pack("<I", 4)  # empty string table
 
 if __name__ == "__main__":
-    version = sys.argv[1] if len(sys.argv) > 1 else "2.0.0"
+    version = sys.argv[1] if len(sys.argv) > 1 else "2.1.0"
     section, relocs = rsrc(resources(version))
     for arch, machine, rel in (("amd64", 0x8664, 3), ("arm64", 0xAA64, 2)):  # IMAGE_REL_*_ADDR32NB
         open(os.path.join(OUT, f"rsrc_windows_{arch}.syso"), "wb").write(coff(machine, rel, section, relocs))

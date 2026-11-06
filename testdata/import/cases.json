@@ -1,0 +1,23 @@
+{
+  "_comment": "Importing google.csv (a Google Password Manager export) into the existing vault below. Shared by the Go and Kotlin tests.",
+  "existing": {
+    "ctx-gh": {"kind": "context", "name": "github.com", "context_type": "website", "urls": ["https://github.com"]},
+    "sec-gh": {"kind": "secret", "name": "github.com", "type": "password", "contexts": ["ctx-gh"], "fields": {"password": "gh-pass"}},
+    "ctx-ex": {"kind": "context", "name": "example.com", "context_type": "website", "urls": ["https://example.com"]},
+    "sec-ex": {"kind": "secret", "name": "example.com", "type": "password", "contexts": ["ctx-ex"], "fields": {"username": "alice", "password": "same"}},
+    "ctx-ig": {"kind": "context", "name": "Instagram", "context_type": "app", "android_packages": ["com.instagram.android"]}
+  },
+  "rows": [
+    {"action": "username", "id": "sec-gh", "username": "dennis"},
+    {"action": "skip"},
+    {"action": "add", "name": "example.com", "username": "alice", "password": "newer", "context": "ctx-ex", "differs": true},
+    {"action": "add", "name": "com.instagram.android", "username": "dennis_ig", "password": "ig-pass", "notes": "note, with comma", "context": "ctx-ig"},
+    {"action": "add", "name": "accounts.google.com", "username": "me@gmail.com", "password": "g\"pass", "notes": "two\nlines",
+     "new_context": {"name": "accounts.google.com", "context_type": "website", "urls": ["https://accounts.google.com"]}},
+    {"action": "skip"},
+    {"action": "invalid"},
+    {"action": "add", "name": "Spotify", "username": "s@x.ch", "password": "sp",
+     "new_context": {"name": "Spotify", "context_type": "app", "android_packages": ["com.spotify.music"]}},
+    {"action": "add", "name": "intranet", "username": "admin", "password": "secret"}
+  ]
+}

@@ -55,6 +55,16 @@ Done and verified:
   username to a username-less login. A 2FA QR code read from a gallery image (photo picker, no permission needed),
   then saved.
 - iOS core: `swift test` on Linux, vectors plus a live round trip.
+- Import from Google Password Manager (and Chrome, Firefox, Bitwarden, 1Password CSVs): shared cases in
+  testdata/import for Go and Kotlin; `storii import` against the dev server (twice: no changes the second time);
+  the Android import screen on the emulator (choose file, import, delete the file, re-import), and a share intent
+  opening it.
+- Authy import: a token export made with Python's hashlib and openssl (testdata/import/authy.json) decrypts the same
+  in Go and Kotlin; the CLI and the Android import screen (wrong then right backup password) against the dev server.
+- The camera scanner in a release build: R8 had stripped ML Kit's reflection-created components (crash on opening the
+  camera); keep rules fixed it. Denied camera permission offers to ask again or open the app settings.
+- Firefox extension in Firefox 140 ESR (test/e2e/firefox.test.js): register, autofill, save prompt, lock. `web-ext
+  lint --self-hosted` has no errors (only `innerHTML` warnings on escaped values).
 
 - iOS app: built for the Simulator on the Mac (`ios/mac-build`) and run with a real vault state there
   (`ios/mac-shots`): locked screen, unlock, list with live 2FA codes, light and dark.
@@ -68,6 +78,13 @@ Done and verified:
   - dark mode and the embedded manifest.
 
 Not verified:
+- A real Authy GDPR export: its exact shape is inferred from the Authy API and tools; the importer finds tokens in
+  any JSON or CSV with those fields.
+- Live QR scanning by the camera in a release build (the emulator's camera couldn't be aimed); decoding images and
+  opening the camera were tested.
+- The signed Firefox build in Zen: signing needs an addons.mozilla.org API key (`just firefox-sign`).
+- Sharing a real Google Password Manager export to the Android app (tested with the same CSV format via the file
+  picker; the share path was only checked to open the import screen).
 - The iOS and macOS AutoFill extensions in action: they need a signed build on a device or Mac with AutoFill turned on.
 - The macOS app running: it compiles, but wasn't opened (it would show on the owner's screen).
 - The Windows tray app on real Windows (only under Wine): tray click and menu, "Start with Windows", per-monitor DPI.

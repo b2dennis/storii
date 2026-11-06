@@ -122,6 +122,12 @@ fun SettingsScreen(nav: NavController, activity: FragmentActivity) {
             }
             HorizontalDivider()
 
+            Text("Import", style = MaterialTheme.typography.titleMedium)
+            Text("Bring your logins over from Google Password Manager, Chrome, Firefox, Bitwarden or 1Password, and your 2FA codes from Authy.",
+                style = MaterialTheme.typography.bodyMedium)
+            OutlinedButton(onClick = { nav.navigate(ImportRoute()) }) { Text("Import passwords") }
+            HorizontalDivider()
+
             Text("Account", style = MaterialTheme.typography.titleMedium)
             Text("${s.username} on ${s.server}")
             OutlinedButton(onClick = { confirmLogout = true }) { Text("Log out of this device", color = MaterialTheme.colorScheme.error) }

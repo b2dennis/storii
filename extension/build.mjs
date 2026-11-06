@@ -27,7 +27,15 @@ const targets = {
   firefox: {
     ...base,
     background: { scripts: ['background.js'], type: 'module' },
-    browser_specific_settings: { gecko: { id: 'storii@base2.sh', strict_min_version: '128.0' } },
+    browser_specific_settings: {
+      gecko: {
+        id: 'storii@base2.sh',
+        strict_min_version: '140.0',
+        // Signed builds (just firefox-sign) are self-hosted on GitHub releases; Firefox and Zen check this for updates.
+        update_url: 'https://github.com/b2dennis/storii/releases/latest/download/storii-firefox-updates.json',
+        data_collection_permissions: { required: ['none'] },
+      },
+    },
   },
 };
 

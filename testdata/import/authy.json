@@ -1,0 +1,39 @@
+{
+  "authenticator_tokens": [
+    {
+      "account_type": "github",
+      "name": "GitHub: dennis@example.com",
+      "issuer": "GitHub",
+      "digits": 6,
+      "logo": "github",
+      "unique_id": "1001",
+      "salt": "4f8b2c9e1a7d3b6f",
+      "unique_iv": "0123456789abcdef0123456789abcdef",
+      "key_derivation_iterations": 100000,
+      "encrypted_seed": "sLnMDRtXtRP2EdSbB+ROBMsixP0kGbJOkuAXhUP19Xc="
+    },
+    {
+      "account_type": "authenticator",
+      "name": "Proton: me@proton.me",
+      "digits": 8,
+      "unique_id": "1002",
+      "salt": "9a8b7c6d5e4f",
+      "key_derivation_iterations": 1000,
+      "encrypted_seed": "Kk1NsOwf3OkHW5/ozXoiUm00V7QZ7eRPl7IO85T2nn/hfNPutvOy9PSjEkdO5llF"
+    },
+    {
+      "account_type": "authenticator",
+      "name": "Example",
+      "issuer": "Example",
+      "digits": 6,
+      "unique_id": "1003",
+      "salt": "saltysalt",
+      "unique_iv": "ffeeddccbbaa99887766554433221100",
+      "key_derivation_iterations": 100000,
+      "encrypted_seed": "QojuqmqEKBRN9mVP/1FR7HUlb21b0FTWJfXbRsgdfmFaZvQjSpjAIpcVhooi+R/y"
+    }
+  ],
+  "deleted": [],
+  "message": "success",
+  "success": true
+}
