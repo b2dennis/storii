@@ -1,41 +1,64 @@
-APP_API_NAME := "storii-api"
-APP_CLI_NAME := "storii-cli"
-API_CMD_DIR := "./cmd/storii-api"
-CLI_CMD_DIR := "./cmd/storii-cli"
 BUILD_DIR := "./build/bin"
-FILE_EXTENSION := if os() == "windows" { ".exe" } else { "" }
+EXE := if os() == "windows" { ".exe" } else { "" }
 
 default: build
 
-dev: build-api
-  @echo "==> Starting dev API server at localhost:9999"
-  @DBPATH=":memory:" {{BUILD_DIR}}/{{APP_API_NAME}}{{FILE_EXTENSION}}
+# Server and CLI binaries in ./build/bin
+build:
+  go build -o "{{BUILD_DIR}}/storii-api{{EXE}}" ./cmd/storii-api
+  go build -o "{{BUILD_DIR}}/storii{{EXE}}" ./cmd/storii
 
-build-api:
-  @echo "==> Building API server binary"
-  @go build -o "{{BUILD_DIR}}/{{APP_API_NAME}}{{FILE_EXTENSION}}" {{API_CMD_DIR}}
+# A throwaway server on :9999 with embedded Postgres and open registration
+dev:
+  go run ./cmd/storii-devserver
 
-build-cli:
-  @echo "==> Building CLI client binary"
-  @go build -o "{{BUILD_DIR}}/{{APP_CLI_NAME}}{{FILE_EXTENSION}}" {{CLI_CMD_DIR}}
+# Go, browser extension, Android and iOS-core unit tests
+test: test-go test-extension test-android test-ios
 
-build: build-api build-cli
-  @echo "==> ✅ All builds complete!"
-  @echo "==> Binaries are in {{BUILD_DIR}}"
+test-go:
+  go vet ./...
+  go test ./...
+  GOOS=windows go build -o /dev/null ./cmd/storii-tray
+
+# Windows tray app (search hotkey, copy to clipboard) for x64 and ARM, plus the Windows CLI
+windows:
+  GOOS=windows GOARCH=amd64 go build -ldflags "-H windowsgui" -o "{{BUILD_DIR}}/windows-amd64/storii-tray.exe" ./cmd/storii-tray
+  GOOS=windows GOARCH=arm64 go build -ldflags "-H windowsgui" -o "{{BUILD_DIR}}/windows-arm64/storii-tray.exe" ./cmd/storii-tray
+  GOOS=windows GOARCH=amd64 go build -o "{{BUILD_DIR}}/windows-amd64/storii.exe" ./cmd/storii
+  GOOS=windows GOARCH=arm64 go build -o "{{BUILD_DIR}}/windows-arm64/storii.exe" ./cmd/storii
+
+# Regenerates the tray app's icons and Windows resources (icon, manifest, version)
+winres version="2.0.0":
+  python3 assets/make_icons.py cmd/storii-tray/icons 16 20 24 32 40 48 64 256
+  python3 assets/make_winres.py {{version}}
+
+test-extension:
+  cd extension && npm ci && npm test
+
+test-android:
+  cd android && ./gradlew testDebugUnitTest
+
+test-ios:
+  cd ios/StoriiCore && swift test
+
+# End to end against `just dev` running: the extension in Chromium (with CLI interop) and the iOS core round trip
+e2e: build
+  cd extension && STORII_E2E_SERVER=http://localhost:9999 STORII_E2E_CLI=../build/bin/storii{{EXE}} npm run e2e
+  cd ios/StoriiCore && STORII_E2E_SERVER=http://localhost:9999 swift test --filter LiveServer
+
+# Unpacked extensions in extension/dist/{chrome,firefox}
+extension:
+  cd extension && npm ci && npm run build
+
+android:
+  cd android && ./gradlew assembleDebug
+
+# Regenerates the vector outputs after changing inputs in testdata/vectors.json
+vectors:
+  go test ./internal/vault -update
+
+image:
+  docker build -t ghcr.io/b2dennis/storii-api:latest .
 
 clean:
-  @echo "==> Cleaning all build artifacts..."
-  @rm -rf {{BUILD_DIR}}
-
-test-api *FLAGS="":
-  @echo "==> Running API server tests"
-  @go test {{API_CMD_DIR}} {{FLAGS}}
-
-test-cli *FLAGS="":
-  @echo "==> Running CLI client tests"
-  @go test {{CLI_CMD_DIR}} {{FLAGS}}
-
-test *FLAGS="": (test-api FLAGS) (test-cli FLAGS)
-  @echo "==> ✅ All tests complete!"
-
-full: (test "-v") build
+  rm -rf {{BUILD_DIR}} extension/dist

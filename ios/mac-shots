@@ -1,0 +1,48 @@
+#!/bin/bash
+# Screenshots of the iOS app in a Simulator, through mac-run. Debug builds only.
+#   ios/mac-shots STATE.json PASSWORD [OUTDIR]
+# STATE.json is a vault state file (the CLI's state.json has the same format); it's put into the app's container and
+# unlocked with PASSWORD via the debug-only -storii-unlock argument. Nothing talks to a server.
+set -euo pipefail
+state=$1 password=$2 out=${3:-ios-shots}
+cd "$(dirname "$0")"
+scp -q "$state" mac:/tmp/storii-shot-state.json
+mac-run bash -c '
+set -euo pipefail
+export PATH=/opt/homebrew/bin:$PATH
+CACHE="$HOME/vm-builds/.cache/storii"
+xcodegen generate --quiet
+xcodebuild -project Storii.xcodeproj -scheme Storii -destination "generic/platform=iOS Simulator" \
+  -derivedDataPath "$CACHE/DerivedData" CODE_SIGNING_ALLOWED=NO -quiet build 2>&1 | grep -E "error:" || true
+app="$CACHE/DerivedData/Build/Products/Debug-iphonesimulator/Storii.app"
+device=$(xcrun simctl list devices available -j | python3 -c "
+import json, sys
+devs = [d for rt, ds in json.load(sys.stdin)[\"devices\"].items() if \"iOS\" in rt for d in ds if d[\"name\"].startswith(\"iPhone\")]
+print(devs[-1][\"udid\"] if devs else \"\")")
+booted=0
+if ! xcrun simctl list devices booted | grep -q "$device"; then xcrun simctl boot "$device"; booted=1; fi
+xcrun simctl bootstatus "$device" -b >/dev/null
+xcrun simctl status_bar "$device" override --time 9:41 --batteryLevel 100 --cellularBars 4 || true
+xcrun simctl uninstall "$device" sh.base2.storii 2>/dev/null || true
+xcrun simctl install "$device" "$app"
+data=$(xcrun simctl get_app_container "$device" sh.base2.storii data)
+mkdir -p "$data/Library/Application Support"
+cp /tmp/storii-shot-state.json "$data/Library/Application Support/vault.json"
+shots="$CACHE/shots" && rm -rf "$shots" && mkdir -p "$shots"
+for appearance in light dark; do
+  xcrun simctl ui "$device" appearance $appearance
+  xcrun simctl launch --terminate-running-process "$device" sh.base2.storii >/dev/null; sleep 4
+  xcrun simctl io "$device" screenshot "$shots/$appearance-1-locked.png" >/dev/null 2>&1
+  xcrun simctl launch --terminate-running-process "$device" sh.base2.storii -storii-unlock "'"$password"'" >/dev/null; sleep 10
+  xcrun simctl io "$device" screenshot "$shots/$appearance-2-secrets.png" >/dev/null 2>&1
+done
+xcrun simctl terminate "$device" sh.base2.storii || true
+xcrun simctl uninstall "$device" sh.base2.storii || true
+xcrun simctl ui "$device" appearance light
+if (( booted )); then xcrun simctl shutdown "$device"; fi
+rm -f /tmp/storii-shot-state.json
+echo "$shots"
+'
+mkdir -p "$out"
+scp -q "mac:vm-builds/.cache/storii/shots/*.png" "$out/"
+ls "$out"

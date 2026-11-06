@@ -1,0 +1,6 @@
+<resources>
+    <color name="background">#FFF8F7FC</color>
+    <color name="brand">#FF5856D6</color>
+    <color name="autofill_text">#FF1D1D1F</color>
+    <color name="autofill_subtext">#FF6B6B76</color>
+</resources>

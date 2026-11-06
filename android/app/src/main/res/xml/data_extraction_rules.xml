@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nothing is backed up or transferred: the vault lives on the server, the session belongs to this device. -->
+<data-extraction-rules>
+    <cloud-backup><exclude domain="root" /><exclude domain="file" /><exclude domain="sharedpref" /><exclude domain="database" /></cloud-backup>
+    <device-transfer><exclude domain="root" /><exclude domain="file" /><exclude domain="sharedpref" /><exclude domain="database" /></device-transfer>
+</data-extraction-rules>

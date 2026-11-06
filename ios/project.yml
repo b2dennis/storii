@@ -1,0 +1,116 @@
+# XcodeGen spec. The .xcodeproj is generated (`xcodegen generate`) and not committed.
+# iOS: Storii + StoriiAutoFill. macOS: StoriiMac + StoriiMacAutoFill, built from the same Swift files.
+name: Storii
+options:
+  bundleIdPrefix: sh.base2
+  deploymentTarget:
+    iOS: "18.0"
+    macOS: "15.0"
+packages:
+  StoriiCore:
+    path: StoriiCore
+settings:
+  base:
+    MARKETING_VERSION: "2.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "6.0"
+targets:
+  Storii:
+    type: application
+    platform: iOS
+    sources: [Storii, Shared]
+    dependencies:
+      - package: StoriiCore
+      - target: StoriiAutoFill
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: sh.base2.storii
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: storii
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_NSFaceIDUsageDescription: storii uses Face ID to unlock your vault instead of the master password.
+        INFOPLIST_KEY_NSCameraUsageDescription: storii uses the camera to scan 2FA QR codes.
+        CODE_SIGN_ENTITLEMENTS: Storii/Storii.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  StoriiAutoFill:
+    type: app-extension
+    platform: iOS
+    sources: [AutoFill, Shared]
+    dependencies:
+      - package: StoriiCore
+      - sdk: AuthenticationServices.framework
+    info:
+      path: AutoFill/Info.plist
+      properties:
+        CFBundleDisplayName: storii
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSFaceIDUsageDescription: storii uses Face ID to unlock your vault instead of the master password.
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.authentication-services-credential-provider-ui
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).CredentialProviderViewController
+          NSExtensionAttributes:
+            ASCredentialProviderExtensionShowsConfigurationUI: false
+            ASCredentialProviderExtensionCapabilities:
+              ProvidesPasswords: true
+              ProvidesOneTimeCodes: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: sh.base2.storii.autofill
+        CODE_SIGN_ENTITLEMENTS: AutoFill/AutoFill.entitlements
+
+  StoriiMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: Storii
+        excludes: [Assets.xcassets, Storii.entitlements]
+      - Shared
+      - path: Mac
+        excludes: [MacAutoFill/**, "*.entitlements"]
+    dependencies:
+      - package: StoriiCore
+      - target: StoriiMacAutoFill
+    info:
+      path: Mac/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDisplayName: storii
+        CFBundleName: storii
+        LSApplicationCategoryType: public.app-category.productivity
+        StoriiAppGroup: $(TeamIdentifierPrefix)sh.base2.storii
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: sh.base2.storii
+        PRODUCT_NAME: storii
+        CODE_SIGN_ENTITLEMENTS: Mac/StoriiMac.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  StoriiMacAutoFill:
+    type: app-extension
+    platform: macOS
+    sources: [AutoFill, Shared]
+    dependencies:
+      - package: StoriiCore
+      - sdk: AuthenticationServices.framework
+    info:
+      path: Mac/MacAutoFill/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDisplayName: storii
+        StoriiAppGroup: $(TeamIdentifierPrefix)sh.base2.storii
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.authentication-services-credential-provider-ui
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).CredentialProviderViewController
+          NSExtensionAttributes:
+            ASCredentialProviderExtensionShowsConfigurationUI: false
+            ASCredentialProviderExtensionCapabilities:
+              ProvidesPasswords: true
+              ProvidesOneTimeCodes: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: sh.base2.storii.autofill
+        CODE_SIGN_ENTITLEMENTS: Mac/AutoFillMac.entitlements
+        ENABLE_HARDENED_RUNTIME: YES

@@ -1,0 +1,274 @@
+openapi: 3.1.0
+info:
+  title: storii API
+  version: "2.0"
+  description: |
+    The storii v2 server. It is zero-knowledge: clients derive their keys from the master password (docs/CRYPTO.md)
+    and only ever send an auth key (to log in) and ciphertext (the items). Item kinds, types, names and context
+    links are all inside the ciphertext.
+
+    Errors are `{"error": "message"}` with a 4xx/5xx status. The auth endpoints (prelogin, register, login) are rate
+    limited per IP (429).
+servers:
+  - url: http://localhost:9999
+security:
+  - bearer: []
+paths:
+  /healthz:
+    get:
+      summary: Liveness check
+      security: []
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Ping" } } } }
+  /api/v2/ping:
+    get:
+      summary: Identifies a storii v2 server
+      security: []
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Ping" } } } }
+  /api/v2/prelogin:
+    post:
+      summary: The KDF parameters for a username
+      description: Unknown usernames get a stable fake salt, so the answer doesn't reveal which accounts exist.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username]
+              properties: { username: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [kdf]
+                properties: { kdf: { $ref: "#/components/schemas/KDF" } }
+        "429": { $ref: "#/components/responses/Error" }
+  /api/v2/register:
+    post:
+      summary: Creates an account and a session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, kdf, auth_key, wrapped_key]
+              properties:
+                username: { type: string, description: "3-64 letters, digits or _.@-, starting with a letter; unique ignoring case" }
+                kdf: { $ref: "#/components/schemas/KDF" }
+                auth_key: { type: string, format: byte, description: 32-byte auth key, base64 }
+                wrapped_key: { $ref: "#/components/schemas/Envelope" }
+                device_name: { type: string, maxLength: 100 }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Session" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { description: Registration is closed (REGISTRATION=closed), content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: Username taken, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "429": { $ref: "#/components/responses/Error" }
+  /api/v2/login:
+    post:
+      summary: Creates a session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, auth_key]
+              properties:
+                username: { type: string }
+                auth_key: { type: string, format: byte }
+                device_name: { type: string, maxLength: 100 }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Session" } } } }
+        "401": { description: Wrong username or master password, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "429": { $ref: "#/components/responses/Error" }
+  /api/v2/logout:
+    post:
+      summary: Ends this session
+      responses:
+        "204": { description: Logged out }
+  /api/v2/account:
+    get:
+      summary: The account, including the wrapped vault key and KDF (they change when the master password does)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Account" } } } }
+        "401": { $ref: "#/components/responses/Error" }
+    delete:
+      summary: Deletes the account and everything in it
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [auth_key]
+              properties: { auth_key: { type: string, format: byte } }
+      responses:
+        "204": { description: Deleted }
+        "403": { description: Wrong master password, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /api/v2/account/password:
+    put:
+      summary: Changes the master password
+      description: >
+        The vault key stays the same, so items aren't re-encrypted: the client sends the vault key wrapped with the
+        new password's keys. All other sessions are signed out.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_auth_key, kdf, auth_key, wrapped_key]
+              properties:
+                current_auth_key: { type: string, format: byte }
+                kdf: { $ref: "#/components/schemas/KDF" }
+                auth_key: { type: string, format: byte }
+                wrapped_key: { $ref: "#/components/schemas/Envelope" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Account" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { description: Current master password is wrong, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /api/v2/sessions:
+    get:
+      summary: The account's signed-in devices
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, description: Short id derived from the token hash }
+                        device_name: { type: string }
+                        created_at: { type: string, format: date-time }
+                        last_used_at: { type: string, format: date-time }
+                        current: { type: boolean }
+  /api/v2/sessions/{id}:
+    delete:
+      summary: Signs out another device
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Signed out }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v2/sync:
+    get:
+      summary: Items changed since a revision
+      description: >
+        With since=0 the answer is a full snapshot of the live items, without tombstones: clients replace their local
+        copy with it. With since>0 it holds every item written after that revision, deletions as tombstones
+        (`deleted: true`, no data). Store the returned revision for the next call.
+      parameters:
+        - { name: since, in: query, schema: { type: integer, format: int64, default: 0 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [revision, items]
+                properties:
+                  revision: { type: integer, format: int64 }
+                  items: { type: array, items: { $ref: "#/components/schemas/RemoteItem" } }
+  /api/v2/items:
+    post:
+      summary: Writes items (upserts and deletes) in one transaction
+      description: Last writer wins. Each write bumps the account revision; all writes of a batch share the new revision.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [writes]
+              properties:
+                writes:
+                  type: array
+                  minItems: 1
+                  maxItems: 2000
+                  items:
+                    type: object
+                    required: [id]
+                    properties:
+                      id: { type: string, format: uuid, description: Chosen by the client }
+                      data: { $ref: "#/components/schemas/Envelope" }
+                      delete: { type: boolean, description: Set to delete; then data must be absent }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { revision: { type: integer, format: int64 } }
+        "400": { $ref: "#/components/responses/Error" }
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: The session token from register/login. Sessions expire after SESSIONDAYS of not being used.
+  responses:
+    Error:
+      description: Error
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  schemas:
+    Error:
+      type: object
+      properties: { error: { type: string } }
+    Ping:
+      type: object
+      properties:
+        status: { type: string, example: ok }
+        api: { type: string, example: v2 }
+    KDF:
+      type: object
+      required: [alg, salt, iterations, memory_kib, parallelism]
+      properties:
+        alg: { type: string, enum: [argon2id] }
+        salt: { type: string, format: byte, description: 16 random bytes, base64 }
+        iterations: { type: integer, example: 3 }
+        memory_kib: { type: integer, example: 65536 }
+        parallelism: { type: integer, example: 2 }
+    Envelope:
+      type: string
+      format: byte
+      description: base64(0x01 || nonce(12) || AES-256-GCM ciphertext || tag(16)), see docs/CRYPTO.md
+    Account:
+      type: object
+      properties:
+        username: { type: string }
+        kdf: { $ref: "#/components/schemas/KDF" }
+        wrapped_key: { $ref: "#/components/schemas/Envelope" }
+        revision: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+    Session:
+      type: object
+      properties:
+        token: { type: string }
+        account: { $ref: "#/components/schemas/Account" }
+    RemoteItem:
+      type: object
+      required: [id, revision]
+      properties:
+        id: { type: string, format: uuid }
+        data: { $ref: "#/components/schemas/Envelope" }
+        deleted: { type: boolean }
+        revision: { type: integer, format: int64 }
+        updated_at: { type: string, format: date-time }

@@ -1,0 +1,21 @@
+#!/bin/bash
+# Builds the iOS and macOS apps on the Mac through mac-run (the VM can't run Xcode). Usage, from anywhere in the repo:
+#   ios/mac-build            iOS Simulator + macOS builds, unsigned
+#   ios/mac-build test       StoriiCore's swift test first
+set -euo pipefail
+cd "$(dirname "$0")"
+exec mac-run bash -c '
+set -euo pipefail
+export PATH=/opt/homebrew/bin:$PATH
+CACHE="$HOME/vm-builds/.cache/storii"
+mkdir -p "$CACHE"
+xcodegen generate --quiet
+if [[ "'"${1:-}"'" == test ]]; then (cd StoriiCore && swift test --scratch-path "$CACHE/core-build" 2>&1 | grep -v -E "^\[[0-9]+/[0-9]+\]"); fi
+echo "== iOS Simulator"
+xcodebuild -project Storii.xcodeproj -scheme Storii -destination "generic/platform=iOS Simulator" \
+  -derivedDataPath "$CACHE/DerivedData" CODE_SIGNING_ALLOWED=NO -quiet build
+echo "== macOS"
+xcodebuild -project Storii.xcodeproj -scheme StoriiMac -destination "generic/platform=macOS" \
+  -derivedDataPath "$CACHE/DerivedData" CODE_SIGNING_ALLOWED=NO -quiet build
+echo "== ok"
+'

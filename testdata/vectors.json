@@ -1,0 +1,292 @@
+{
+  "comment": "Shared storii v2 test vectors (docs/CRYPTO.md). Inputs are edited by hand; outputs come from `go test ./internal/vault -update`.",
+  "kdf": [
+    {
+      "password": "correct horse battery staple",
+      "kdf": {
+        "alg": "argon2id",
+        "salt": "AAECAwQFBgcICQoLDA0ODw==",
+        "iterations": 3,
+        "memory_kib": 65536,
+        "parallelism": 2
+      },
+      "auth_key": "kNmZAcR08rtSrNC/YH25FyxOt76emR1ZSVTnasGjfWs=",
+      "wrap_key": "bLrLwFNow9ElAnLZZog0vrhMSnv3sogGF1r/9zjUMWM="
+    },
+    {
+      "password": "pässwörd 🔑",
+      "kdf": {
+        "alg": "argon2id",
+        "salt": "c3RvcmlpLXNhbHQtMTIzNA==",
+        "iterations": 1,
+        "memory_kib": 16384,
+        "parallelism": 1
+      },
+      "auth_key": "/FZXomwANZCdjKPK75rtf+XgStnRKIUXfG8WaIJ1VjY=",
+      "wrap_key": "05jXJXdJsuw0jqyeHIIDql/alRFMZga3WirJ1sYBYqU="
+    },
+    {
+      "password": "pässwörd 🔑",
+      "kdf": {
+        "alg": "argon2id",
+        "salt": "c3RvcmlpLXNhbHQtMTIzNA==",
+        "iterations": 1,
+        "memory_kib": 16384,
+        "parallelism": 1
+      },
+      "auth_key": "/FZXomwANZCdjKPK75rtf+XgStnRKIUXfG8WaIJ1VjY=",
+      "wrap_key": "05jXJXdJsuw0jqyeHIIDql/alRFMZga3WirJ1sYBYqU=",
+      "comment": "NFD spelling of the previous password: same keys"
+    }
+  ],
+  "vault_key": {
+    "wrap_key": "bLrLwFNow9ElAnLZZog0vrhMSnv3sogGF1r/9zjUMWM=",
+    "vault_key": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=",
+    "nonce": "ZGVmZ2hpamtsbW5v",
+    "wrapped": "AWRlZmdoaWprbG1uby2mSxfRESdWxnV6ng/z/pzsLKVopuBniVf07ErhTI9GYHqCx6uAkN0TpK9tiAzFpg=="
+  },
+  "items": [
+    {
+      "id": "0b7c1a3e-6a51-4e0b-9a49-2f8c1f4d7e01",
+      "vault_key": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=",
+      "nonce": "AQIDBAUGBwgJCgsM",
+      "plaintext": "{\"kind\":\"context\",\"name\":\"GitHub\",\"context_type\":\"website\",\"urls\":[\"https://github.com\"],\"android_packages\":[\"com.github.android\"],\"created_at\":\"2026-11-05T10:00:00Z\",\"updated_at\":\"2026-11-05T10:00:00Z\"}",
+      "data": "AQECAwQFBgcICQoLDAYX6jj/8OqnaHxQqVTEk5g989mvZw8hrO9dhnI9l44PiNHF6d+QQicz8e1NhPB//x31fpFHEl1k/e0//zpAeWOoW5Efpiq6GY0qcJLXzTOvSSvnc1xLX7FZi7fcq8eynSJu1mwilYec6uEQKDk0/QsLATFAgKMJhwlsjsLu2KGxvKDSb+hhCarSBgIqeXOiMUc6SImhyh1IuEBn9MBS8j4WpKaBUU+OzenNHDOZi2MGlOulmv8zo9hpnOe/xkp9krEqqe5EnJKFmVepc1MOr+euUZIBt6+lSBxAvQ=="
+    },
+    {
+      "id": "5d1f8a20-3c4b-4f6e-8a7d-1b2c3d4e5f60",
+      "vault_key": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=",
+      "nonce": "DQ4PEBESExQVFhcY",
+      "plaintext": "{\"kind\":\"secret\",\"name\":\"GitHub login\",\"type\":\"password\",\"contexts\":[\"0b7c1a3e-6a51-4e0b-9a49-2f8c1f4d7e01\"],\"fields\":{\"username\":\"dennis\",\"password\":\"hunter2 ✓\"},\"created_at\":\"2026-11-05T10:00:00Z\",\"updated_at\":\"2026-11-05T10:00:00Z\"}",
+      "data": "AQ0ODxAREhMUFRYXGLD0+dFeeS0YYppKBxplBPx+pU/TAZzd/7xLC2Vo8HV++9TXdRWV/Af2nyXqYavXro7KPush1fWTd5ZFmJIyBGSQRQutM7Tn9WCFzOGSIllC3GyV2zvo3HaEyKbyX1KrnmEk1K4rxq//PBsm39P/wsL7Ti5PEV6NvzGnRlh+bAl57YzEtajF/aS0Fgh+scq9Ywy7iAG4qZQ/1M1Oibg7Pfb/R/DRIqcfDQfU24ni0Y985iOuDS47gUqfuqBbKmt/ESQWrJ51LOzLnljuoGKo5YKuZJ3obUD/FEHns3r592Z5B1oF0PCHq7m4/UowUMvAXoCoysf+dSVDP5oZ1dk="
+    },
+    {
+      "id": "9e8d7c6b-5a49-4382-a716-151413121110",
+      "vault_key": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=",
+      "nonce": "GRobHB0eHyAhIiMk",
+      "plaintext": "{\"kind\":\"secret\",\"name\":\"GitHub 2FA\",\"type\":\"totp\",\"contexts\":[\"0b7c1a3e-6a51-4e0b-9a49-2f8c1f4d7e01\"],\"fields\":{\"secret\":\"JBSWY3DPEHPK3PXP\",\"issuer\":\"GitHub\",\"account\":\"dennis\"},\"custom\":[{\"name\":\"recovery code\",\"value\":\"abcd-efgh\",\"hidden\":true}],\"created_at\":\"2026-11-05T10:00:00Z\",\"updated_at\":\"2026-11-05T10:00:00Z\"}",
+      "data": "ARkaGxwdHh8gISIjJLStzuRvTvb+q2FePgcj/DCyGgfZTNFMf5kTRqNc4RdsTgnv4xpRryjav9Gws5ULXZqX4kMUrUUr5iwkQR7Qg77bfPGhjur4I0ZhabKWh6SIxin9V+VV58NHiBZLMjN6PPtAjxjWovUfsB74c+6NBsGNEyEhMG5vy3MLFFZKDPe+d3ytpq5OAcp3HI61w2LMd9bbqeT84WKCXxjZZrAZj08KIMbQMJd5fXBKXpSiMof6zpbxE6DUwtVR9BZJe/vhfZ/OZXvIiElPlJlRo16XtgvejzwYSrpozGK2TBSRdvLfDTKWSuHY7dsofN9vUNrNcnjkBWlDWmi6xPDabhaKXIoC6Wbn9EtFx5dPHNsuZwGRZ6KrAcWRVK581b08CLwpqC+ptzHlD1VJrN9elhUIWguyWVZtHxTJszi3voQtv1I2KW/EOjhuskZ/lIMo/eJV8xg="
+    }
+  ],
+  "totp": [
+    {
+      "fields": {
+        "digits": "8",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+      },
+      "time": 59,
+      "code": "94287082"
+    },
+    {
+      "fields": {
+        "algorithm": "SHA256",
+        "digits": "8",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA"
+      },
+      "time": 59,
+      "code": "46119246"
+    },
+    {
+      "fields": {
+        "algorithm": "sha512",
+        "digits": "8",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNA"
+      },
+      "time": 59,
+      "code": "90693936"
+    },
+    {
+      "fields": {
+        "digits": "8",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+      },
+      "time": 1111111109,
+      "code": "07081804"
+    },
+    {
+      "fields": {
+        "algorithm": "SHA256",
+        "digits": "8",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA"
+      },
+      "time": 1111111109,
+      "code": "68084774"
+    },
+    {
+      "fields": {
+        "algorithm": "sha512",
+        "digits": "8",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNA"
+      },
+      "time": 1111111109,
+      "code": "25091201"
+    },
+    {
+      "fields": {
+        "digits": "8",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+      },
+      "time": 1234567890,
+      "code": "89005924"
+    },
+    {
+      "fields": {
+        "algorithm": "SHA256",
+        "digits": "8",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA"
+      },
+      "time": 1234567890,
+      "code": "91819424"
+    },
+    {
+      "fields": {
+        "algorithm": "sha512",
+        "digits": "8",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNA"
+      },
+      "time": 1234567890,
+      "code": "93441116"
+    },
+    {
+      "fields": {
+        "digits": "8",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+      },
+      "time": 20000000000,
+      "code": "65353130"
+    },
+    {
+      "fields": {
+        "algorithm": "SHA256",
+        "digits": "8",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA"
+      },
+      "time": 20000000000,
+      "code": "77737706"
+    },
+    {
+      "fields": {
+        "algorithm": "sha512",
+        "digits": "8",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNA"
+      },
+      "time": 20000000000,
+      "code": "47863826"
+    },
+    {
+      "fields": {
+        "secret": "jbsw y3dp ehpk 3pxp"
+      },
+      "time": 1700000000,
+      "code": "324550"
+    },
+    {
+      "fields": {
+        "period": "60",
+        "secret": "JBSWY3DPEHPK3PXP"
+      },
+      "time": 1700000000,
+      "code": "508648"
+    }
+  ],
+  "otpauth": [
+    {
+      "uri": "otpauth://totp/GitHub:dennis?secret=JBSWY3DPEHPK3PXP&issuer=GitHub",
+      "fields": {
+        "account": "dennis",
+        "issuer": "GitHub",
+        "secret": "JBSWY3DPEHPK3PXP"
+      }
+    },
+    {
+      "uri": "otpauth://totp/ACME%20Co:john.doe@email.com?secret=HXDMVJECJJWSRB3HWIZR4IFUGFTMXBOZ&issuer=ACME%20Co&algorithm=SHA256&digits=8&period=60",
+      "fields": {
+        "account": "john.doe@email.com",
+        "algorithm": "SHA256",
+        "digits": "8",
+        "issuer": "ACME Co",
+        "period": "60",
+        "secret": "HXDMVJECJJWSRB3HWIZR4IFUGFTMXBOZ"
+      }
+    },
+    {
+      "uri": "otpauth://totp/alice@example.com?secret=jbswy3dpehpk3pxp",
+      "fields": {
+        "account": "alice@example.com",
+        "secret": "JBSWY3DPEHPK3PXP"
+      }
+    },
+    {
+      "uri": "otpauth://totp/Example:bob?secret=JBSWY3DPEHPK3PXP&issuer=Other",
+      "fields": {
+        "account": "bob",
+        "issuer": "Other",
+        "secret": "JBSWY3DPEHPK3PXP"
+      }
+    },
+    {
+      "uri": "otpauth://hotp/Example:bob?secret=JBSWY3DPEHPK3PXP&counter=1",
+      "error": true
+    },
+    {
+      "uri": "otpauth://totp/Example:bob?secret=not-base32!",
+      "error": true
+    },
+    {
+      "uri": "https://example.com",
+      "error": true
+    }
+  ],
+  "match": [
+    {
+      "context_url": "https://github.com",
+      "host": "github.com",
+      "match": true
+    },
+    {
+      "context_url": "https://github.com/login",
+      "host": "https://github.com/session",
+      "match": true
+    },
+    {
+      "context_url": "github.com",
+      "host": "gist.github.com",
+      "match": true
+    },
+    {
+      "context_url": "https://www.google.com",
+      "host": "accounts.google.com",
+      "match": true
+    },
+    {
+      "context_url": "https://accounts.google.com",
+      "host": "google.com",
+      "match": false
+    },
+    {
+      "context_url": "https://github.com",
+      "host": "notgithub.com",
+      "match": false
+    },
+    {
+      "context_url": "https://github.com",
+      "host": "github.com.evil.io",
+      "match": false
+    },
+    {
+      "context_url": "http://localhost:8080",
+      "host": "localhost",
+      "match": true
+    },
+    {
+      "context_url": "https://GitHub.COM.",
+      "host": "https://github.com:443/x",
+      "match": true
+    },
+    {
+      "context_url": "",
+      "host": "github.com",
+      "match": false
+    }
+  ]
+}

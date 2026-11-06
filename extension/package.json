@@ -1,0 +1,15 @@
+{
+  "name": "storii-extension",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test test/unit/",
+    "e2e": "node build.mjs && node --test test/e2e/"
+  },
+  "devDependencies": {
+    "hash-wasm": "4.12.0",
+    "playwright": "1.65.0"
+  }
+}
