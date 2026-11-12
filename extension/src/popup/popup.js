@@ -669,10 +669,15 @@ async function renderSettings(st) {
       Unlock with a passkey</label>
       <div class="muted small">Windows Hello, Touch ID, your phone or a security key instead of the master password. Set up per browser.</div>
       <div class="err" id="qerr"></div></div>
+    <button id="import">Import passwords from a browser…</button>
     <div class="muted small">Logged in as <b>${esc(st.username)}</b> on ${esc(st.server)}.</div>
     <div class="muted small">Keyboard shortcut to fill the current page: Ctrl+Shift+L (change it in the browser’s extension shortcut settings).</div>
     <button id="out" class="danger">Log out of this browser</button></div>`;
   document.getElementById('back').onclick = () => { ui.view = 'list'; render(); };
+  document.getElementById('import').onclick = async () => {
+    await chrome.tabs.create({ url: chrome.runtime.getURL('import/import.html') });
+    window.close();
+  };
   const setup = async () => {
     const box = document.getElementById('quick');
     document.getElementById('qerr').textContent = '';

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Import passwords · storii</title>
+  <link rel="stylesheet" href="../popup/popup.css">
+  <link rel="stylesheet" href="import.css">
+</head>
+<body class="page">
+  <main>
+    <h1>Import passwords</h1>
+    <p class="muted">Bring the passwords saved in your browser (or another password manager) into storii. Browsers
+      don’t let extensions read their passwords, so you export them to a file first and choose it here. The file
+      is read in this tab only; nothing but the encrypted vault leaves your computer.</p>
+
+    <section id="locked" hidden>
+      <p class="err">storii is locked. Unlock it, then come back to this tab.</p>
+      <button id="unlock" class="primary">Unlock storii</button>
+    </section>
+
+    <section id="start">
+      <h2>1. Export from your browser</h2>
+      <details id="b-firefox"><summary>Zen and Firefox</summary>
+        <ol>
+          <li>Type <code>about:logins</code> in the address bar and press Enter (in Zen also Settings › Privacy &amp; Security › Saved Passwords).</li>
+          <li>Click <b>⋯</b> at the top right, then <b>Export Passwords…</b>, and confirm with your computer’s password.</li>
+          <li>Save the file (<code>logins.csv</code>).</li>
+        </ol></details>
+      <details id="b-chrome"><summary>Chrome, Brave and Google Password Manager</summary>
+        <ol>
+          <li>Open <code>chrome://password-manager/settings</code> (Brave: <code>brave://password-manager/settings</code>), or
+            passwords.google.com › ⚙.</li>
+          <li><b>Export passwords</b> › <b>Download file</b>, and confirm with your computer’s password.</li>
+        </ol></details>
+      <details id="b-edge"><summary>Edge</summary>
+        <ol>
+          <li>Open <code>edge://wallet/passwords</code>.</li>
+          <li>Click <b>⋯</b> next to “Saved passwords”, then <b>Export passwords</b>.</li>
+        </ol></details>
+      <details id="b-safari"><summary>Safari and the Passwords app (Mac)</summary>
+        <ol>
+          <li>In the Passwords app: <b>File › Export All Passwords to File…</b> (or Safari › File › Export › Passwords).</li>
+        </ol></details>
+      <p class="muted small">CSV exports from Bitwarden and 1Password work too. For their full exports (2FA codes,
+        cards, passkeys) use the storii CLI or Android app.</p>
+
+      <h2>2. Choose the file</h2>
+      <input type="file" id="file" accept=".csv,text/csv">
+      <div class="err" id="err" role="alert"></div>
+    </section>
+
+    <section id="ready" hidden>
+      <div class="card" id="summary"></div>
+      <div class="row">
+        <button id="go" class="primary">Import</button>
+        <button id="cancel">Choose another file</button>
+      </div>
+      <ul id="lines" class="lines"></ul>
+    </section>
+
+    <section id="done" hidden>
+      <p id="result"></p>
+      <h2>Now delete the file</h2>
+      <p>The export holds all your passwords unencrypted: delete it (and empty the trash).</p>
+      <h2>And stop the browser from saving passwords</h2>
+      <p class="muted">So the browser and storii don’t both offer to save, turn off the browser’s own password saving:
+        Zen and Firefox: Settings › Privacy &amp; Security › “Ask to save passwords”. Chrome and Brave: Google Password
+        Manager › Settings › “Offer to save passwords”. Edge: Settings › Passwords › “Offer to save passwords”. Once
+        you’ve checked that storii has everything, you can delete the passwords from the browser too.</p>
+      <button id="close" class="primary">Close</button>
+    </section>
+  </main>
+  <script type="module" src="import.js"></script>
+</body>
+</html>

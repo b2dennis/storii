@@ -35,10 +35,11 @@ CLI covers the terminal.
 
 - **Offline**: every client keeps an encrypted copy and unlocks without the server. Changes sync when online.
 - **Moving from v1**: `storii migrate` brings over your old passwords ([docs/MIGRATING.md](docs/MIGRATING.md)).
-- **Importing**: logins from Google Password Manager, Chrome, Firefox, Bitwarden or 1Password, 2FA codes from
-  Authy, everything (logins, 2FA codes, cards, passkeys) from a Bitwarden JSON export, and logins, 2FA codes and
-  cards from a 1Password .1pux export, on the phone or with the CLI (see below). On Android, password managers that
-  support credential transfer (Google Password Manager among them) hand everything over directly, passkeys included.
+- **Importing**: logins from browser exports (Zen, Firefox, Chrome, Edge, Brave, Safari, Google Password Manager),
+  right in the browser extension or on the phone or with the CLI; 2FA codes from Authy; everything (logins, 2FA codes,
+  cards, passkeys) from a Bitwarden JSON export; logins, 2FA codes and cards from a 1Password .1pux export (see
+  below). On Android, password managers that support credential transfer (Google Password Manager among them) hand
+  everything over directly, passkeys included.
 
 ## Layout
 
@@ -96,6 +97,10 @@ storii help
 ```
 
 **Importing from Google Password Manager** (or Chrome, Firefox, Bitwarden, 1Password):
+
+- From a browser (Zen, Firefox, Chrome, Edge, Brave, Safari): in the extension, Settings › "Import passwords from a
+  browser…" opens a page with each browser's export steps; choose the exported CSV there. Browsers don't let
+  extensions read their saved passwords, so the export file is the way in.
 
 - On Android, with passkeys: storii › Settings › Import passwords › Import from another app, then pick Google
   Password Manager (or another app that supports credential transfer). Passwords, passkeys, 2FA codes, cards and notes

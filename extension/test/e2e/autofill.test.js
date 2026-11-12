@@ -323,7 +323,33 @@ test('register, add secrets in the popup, autofill, save prompt', { timeout: 120
   const emailBox = await page.locator('input[name=email]').boundingBox();
   await page.mouse.click(emailBox.x + 60, emailBox.y + emailBox.height + 22);
   await page.waitForTimeout(300);
-  assert.match(await page.inputValue('input[name=pass]'), /^(hunter2-example|brand-new-pass|redirected-pass)$/); // this site's logins
+  // One of this site's logins (the picker's order varies; the reset step above saved a generated one too).
+  const sitePasswords = (await popup.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'items' }, (x) => r(x.result)))))
+    .filter((i) => i.type === 'password').map((i) => i.fields.password);
+  assert.ok(sitePasswords.includes(await page.inputValue('input[name=pass]')), 'filled one of the saved logins');
+
+  // Importing a Zen/Firefox password export from the import page; a second import of the same file adds nothing.
+  const imp = await ctx.newPage();
+  await imp.goto(`chrome-extension://${extId}/import/import.html`);
+  const csv = { name: 'logins.csv', mimeType: 'text/csv', buffer: Buffer.from(
+    '"url","username","password","httpRealm","formActionOrigin","guid","timeCreated","timeLastUsed","timePasswordChanged"\r\n' +
+    '"https://imported.example.org","zen@example.org","from-zen","","https://imported.example.org","{a}","1","1","1"\r\n' +
+    `"${siteURL}","me@example.com","hunter2-example","","","{b}","1","1","1"\r\n`) };
+  await imp.setInputFiles('#file', csv);
+  await imp.waitForSelector('#ready:not([hidden])');
+  assert.match(await imp.textContent('#summary'), /2 logins in the file\s*1 new\s*1 already in storii/);
+  await imp.click('#go');
+  await imp.waitForSelector('#done:not([hidden])');
+  assert.equal(await imp.textContent('#result'), 'Imported 1 login.');
+  const all = await popup.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'items' }, (x) => r(x.result))));
+  const zen = all.find((i) => i.fields?.username === 'zen@example.org');
+  assert.equal(zen?.fields.password, 'from-zen');
+  assert.deepEqual(all.find((i) => i.id === zen.contexts[0])?.urls, ['https://imported.example.org']);
+  await imp.reload();
+  await imp.setInputFiles('#file', csv);
+  await imp.waitForSelector('#ready:not([hidden])');
+  assert.equal(await imp.isHidden('#go'), true);
+  await imp.close();
 
   // The Go CLI reads what the extension wrote.
   const cli = process.env.STORII_E2E_CLI;

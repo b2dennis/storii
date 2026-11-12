@@ -1,0 +1,17 @@
+body.page { width: auto; max-height: none; min-height: 100vh; margin: 0; }
+body.page main { max-width: 640px; margin: 0 auto; padding: 32px 16px 48px; display: flex; flex-direction: column; gap: 12px; }
+body.page h1 { font-size: 22px; margin: 0; }
+body.page h2 { font-size: 15px; margin: 18px 0 6px; }
+body.page p, body.page li { line-height: 1.5; }
+body.page section { display: flex; flex-direction: column; gap: 10px; }
+body.page section[hidden] { display: none; }
+body.page details { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+body.page summary { cursor: pointer; font-weight: 600; }
+body.page details[open] summary { margin-bottom: 4px; }
+body.page ol { margin: 0; padding-left: 20px; }
+body.page code { font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+body.page .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+body.page .row { display: flex; gap: 8px; flex-wrap: wrap; }
+body.page .lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+body.page .lines li { border-top: 1px solid var(--line); padding-top: 6px; }
+body.page input[type=file] { padding: 10px; }
