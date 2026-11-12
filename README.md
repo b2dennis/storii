@@ -37,7 +37,8 @@ CLI covers the terminal.
 - **Moving from v1**: `storii migrate` brings over your old passwords ([docs/MIGRATING.md](docs/MIGRATING.md)).
 - **Importing**: logins from Google Password Manager, Chrome, Firefox, Bitwarden or 1Password, 2FA codes from
   Authy, everything (logins, 2FA codes, cards, passkeys) from a Bitwarden JSON export, and logins, 2FA codes and
-  cards from a 1Password .1pux export, on the phone or with the CLI (see below).
+  cards from a 1Password .1pux export, on the phone or with the CLI (see below). On Android, password managers that
+  support credential transfer (Google Password Manager among them) hand everything over directly, passkeys included.
 
 ## Layout
 
@@ -96,7 +97,10 @@ storii help
 
 **Importing from Google Password Manager** (or Chrome, Firefox, Bitwarden, 1Password):
 
-- On Android: in Google Password Manager, tap Settings › Export passwords and share the file to storii (or save it
+- On Android, with passkeys: storii › Settings › Import passwords › Import from another app, then pick Google
+  Password Manager (or another app that supports credential transfer). Passwords, passkeys, 2FA codes, cards and notes
+  come over without a file in between.
+- On Android, from a file: in Google Password Manager, tap Settings › Export passwords and share the file to storii (or save it
   and choose it in storii › Settings › Import passwords). storii shows what it will add, imports, and deletes the file.
 - On a computer: export from passwords.google.com (Settings › Export passwords), then
   `storii import Passwords.csv --dry-run`, `storii import Passwords.csv`, and delete the file.
@@ -121,7 +125,10 @@ get an app context, so autofill offers them in that app. Logins already in stori
 safe, and a login that matches one migrated from v1 fills in its missing username.
 
 **Browser extension** (Chrome, Edge, Brave; Firefox 140+, Zen): it shows an icon in login fields and fills 2FA fields.
-Ctrl+Shift+L fills the best match. After you sign in with a new password, it offers to save it.
+Ctrl+Shift+L fills the best match. After you sign in with a new password, it offers to save it. Settings › "Unlock
+with a passkey" lets Touch ID, Windows Hello, your phone or a security key unlock it instead of the master password
+(in Firefox and Zen this needs version 150 or later and a storii server with a domain name; the passkey is saved for
+that domain, and storii asks for it in a small window).
 
 - Firefox and Zen: open `storii-<version>-firefox.xpi` from a release (drag it into the window, or Add-ons › ⚙ ›
   Install Add-on From File). It's signed by Mozilla, so it stays installed, and it updates itself from the releases.

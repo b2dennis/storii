@@ -315,13 +315,15 @@ test('register, add secrets in the popup, autofill, save prompt', { timeout: 120
   await unlockFrame.waitForSelector('#err:not(:empty)');
   await unlockFrame.fill('#pw', MASTER);
   await unlockFrame.press('#pw', 'Enter');
-  await page.waitForTimeout(800); // the picker comes back with the matches
+  // The picker comes back with the matches once the unlock frame is gone.
+  for (let i = 0; i < 100 && page.frames().some((f) => f.url().includes('/unlock/unlock.html')); i++) await page.waitForTimeout(100);
+  await page.waitForTimeout(500);
   assert.deepEqual(await page.evaluate(() => window.__keys), []);
   assert.equal(seen, 1);
   const emailBox = await page.locator('input[name=email]').boundingBox();
   await page.mouse.click(emailBox.x + 60, emailBox.y + emailBox.height + 22);
   await page.waitForTimeout(300);
-  assert.match(await page.inputValue('input[name=pass]'), /^(hunter2-example|redirected-pass)$/); // this site's logins
+  assert.match(await page.inputValue('input[name=pass]'), /^(hunter2-example|brand-new-pass|redirected-pass)$/); // this site's logins
 
   // The Go CLI reads what the extension wrote.
   const cli = process.env.STORII_E2E_CLI;

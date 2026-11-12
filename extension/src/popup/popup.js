@@ -4,6 +4,9 @@ import { cardBrand, cardDigits, cardMasked, cardValid, normalizeExpiry } from '.
 
 const app = document.getElementById('app');
 const PASSKEY_REQ = new URLSearchParams(location.search).get('passkey'); // a site's passkey request to approve
+const FIREFOX = location.protocol === 'moz-extension:';
+const IN_WINDOW = new URLSearchParams(location.search).has('window');
+const QUICK_SETUP = new URLSearchParams(location.search).get('setup') === 'quick'; // set up passkey unlock (Firefox)
 if (new URLSearchParams(location.search).has('window')) document.body.classList.add('window');
 
 const TYPES = { password: 'Password', totp: '2FA code', api_key: 'API key', note: 'Note', card: 'Card', passkey: 'Passkey' };
@@ -39,7 +42,7 @@ async function copy(text, what) {
   }, 30000);
 }
 
-const ui = { items: [], tab: null, query: '', view: 'list', editing: null, timer: null };
+const ui = { items: [], tab: null, query: '', view: QUICK_SETUP ? 'settings' : 'list', editing: null, timer: null };
 
 async function currentTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -160,11 +163,30 @@ function renderSetup(register = false) {
 const b64 = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
 const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
+// Firefox (and Zen) only allow WebAuthn in extension pages for a website the extension may access (Firefox 150+), so
+// the passkey belongs to the storii server's host there; without one it fails with "The operation is insecure".
+// Firefox also closes the toolbar popup when the passkey dialog opens, so it runs in a storii window instead.
+const TOO_OLD = 'This browser doesn’t let extensions use passkeys. Firefox and Zen need version 150 or later.';
+
+function firefoxRpId(server) {
+  const host = new URL(server).hostname;
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(host) || /^[0-9.]+$/.test(host)) {
+    throw new Error('In Firefox and Zen, passkey unlock needs a storii server with a domain name (not an IP address).');
+  }
+  return host;
+}
+
+async function openWindow(query) {
+  await chrome.windows.create({ url: chrome.runtime.getURL(`popup/popup.html?window=1${query}`), type: 'popup', width: 380, height: 600 });
+  if (!IN_WINDOW) window.close();
+}
+
 async function quickSetup(st) {
   if (!window.PublicKeyCredential) throw new Error('This browser has no passkey support.');
+  const rpId = FIREFOX ? firefoxRpId(st.server) : undefined;
   const salt = crypto.getRandomValues(new Uint8Array(32));
   const cred = await navigator.credentials.create({ publicKey: {
-    rp: { name: 'storii' },
+    rp: rpId ? { name: 'storii', id: rpId } : { name: 'storii' },
     user: { id: crypto.getRandomValues(new Uint8Array(16)), name: `${st.username} (storii)`, displayName: `storii: ${st.username}` },
     challenge: crypto.getRandomValues(new Uint8Array(32)),
     pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
@@ -175,12 +197,13 @@ async function quickSetup(st) {
   const ext = cred.getClientExtensionResults().prf;
   if (!ext?.enabled) throw new Error('This authenticator can’t unlock storii (it lacks the PRF extension). Try another one.');
   // Some authenticators only evaluate PRF on sign-in, not at creation.
-  const prf = ext.results?.first || (await quickAssert(b64(cred.rawId), b64(salt)));
-  await call('quickUnlockSetup', { prf: b64(prf), credentialId: b64(cred.rawId), salt: b64(salt) });
+  const prf = ext.results?.first || (await quickAssert(b64(cred.rawId), b64(salt), rpId));
+  await call('quickUnlockSetup', { prf: b64(prf), credentialId: b64(cred.rawId), salt: b64(salt), rpId });
 }
 
-async function quickAssert(credentialId, salt) {
+async function quickAssert(credentialId, salt, rpId) {
   const cred = await navigator.credentials.get({ publicKey: {
+    ...(rpId ? { rpId } : {}),
     challenge: crypto.getRandomValues(new Uint8Array(32)),
     allowCredentials: [{ type: 'public-key', id: unb64(credentialId) }],
     userVerification: 'required',
@@ -193,7 +216,7 @@ async function quickAssert(credentialId, salt) {
 
 async function quickUnlockNow() {
   const q = await call('quickUnlockInfo');
-  await call('quickUnlock', { prf: b64(await quickAssert(q.credentialId, q.salt)) });
+  await call('quickUnlock', { prf: b64(await quickAssert(q.credentialId, q.salt, q.rpId)) });
 }
 
 function renderLocked(st) {
@@ -223,6 +246,8 @@ function renderLocked(st) {
   const done = () => (document.body.classList.contains('window') && !PASSKEY_REQ ? window.close() : render());
   call('quickUnlockInfo').then((q) => {
     if (!q) return;
+    // Firefox would close this popup when the passkey dialog opens: unlock in a storii window instead.
+    if (FIREFOX && !IN_WINDOW) return openWindow('');
     const b = document.getElementById('quick');
     b.hidden = false;
     const run = async () => {
@@ -232,7 +257,8 @@ function renderLocked(st) {
         done();
       } catch (e) {
         // Cancelled: leave the master password field for the user.
-        if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') document.getElementById('err').textContent = e.message;
+        if (e.name === 'SecurityError') document.getElementById('err').textContent = TOO_OLD;
+        else if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') document.getElementById('err').textContent = e.message;
         pw.focus();
       }
     };
@@ -647,21 +673,30 @@ async function renderSettings(st) {
     <div class="muted small">Keyboard shortcut to fill the current page: Ctrl+Shift+L (change it in the browser’s extension shortcut settings).</div>
     <button id="out" class="danger">Log out of this browser</button></div>`;
   document.getElementById('back').onclick = () => { ui.view = 'list'; render(); };
-  document.getElementById('quick').onchange = async (e) => {
-    const box = e.target;
+  const setup = async () => {
+    const box = document.getElementById('quick');
     document.getElementById('qerr').textContent = '';
-    if (!box.checked) return call('quickUnlockOff').then(() => toast('Passkey unlock is off'));
     box.disabled = true;
     try {
       await quickSetup(st);
+      box.checked = true;
       toast('Passkey unlock is on');
+      if (QUICK_SETUP) setTimeout(() => window.close(), 1200);
     } catch (err) {
       box.checked = false;
-      if (err.name !== 'NotAllowedError' && err.name !== 'AbortError') document.getElementById('qerr').textContent = err.message;
+      if (err.name === 'SecurityError') document.getElementById('qerr').textContent = TOO_OLD;
+      else if (err.name !== 'NotAllowedError' && err.name !== 'AbortError') document.getElementById('qerr').textContent = err.message;
     } finally {
       box.disabled = false;
     }
   };
+  document.getElementById('quick').onchange = async (e) => {
+    if (!e.target.checked) return call('quickUnlockOff').then(() => toast('Passkey unlock is off'));
+    // Firefox would close this popup when the passkey dialog opens: set up in a storii window instead.
+    if (FIREFOX && !IN_WINDOW) return openWindow('&setup=quick');
+    setup();
+  };
+  if (QUICK_SETUP && !(await call('quickUnlockInfo'))) setup();
   document.getElementById('lock').onchange = (e) => call('settings', { set: { lockMinutes: Number(e.target.value) } }).then(() => toast('Saved'));
   document.getElementById('out').onclick = async () => {
     if (!confirm('Log out? The local copy of the vault is removed from this browser.')) return;

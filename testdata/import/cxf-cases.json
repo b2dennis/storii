@@ -1,0 +1,181 @@
+{
+ "_comment": "Importing cxf.json (a FIDO Credential Exchange Format document, what Android's credential transfer hands over) into the vault below. Lines come in this order: logins, 2FA codes, cards, passkeys, notes. A note credential is the login's or card's notes, or a note of its own. New items get ids new-1, new-2, ... in creation order. Passkey private keys are the one in testdata/passkey.json. Shared by the Kotlin (and later Swift) tests.",
+ "existing": {
+  "ctx-gh": {
+   "kind": "context",
+   "name": "github.com",
+   "context_type": "website",
+   "urls": [
+    "https://github.com"
+   ]
+  },
+  "sec-gh": {
+   "kind": "secret",
+   "name": "github.com",
+   "type": "password",
+   "contexts": [
+    "ctx-gh"
+   ],
+   "fields": {
+    "username": "dennis",
+    "password": "gh-pass"
+   }
+  },
+  "ctx-ex": {
+   "kind": "context",
+   "name": "example.com",
+   "context_type": "website",
+   "urls": [
+    "https://example.com"
+   ]
+  },
+  "sec-card": {
+   "kind": "secret",
+   "name": "Visa",
+   "type": "card",
+   "fields": {
+    "number": "4111111111111111"
+   }
+  },
+  "sec-pk": {
+   "kind": "secret",
+   "name": "Old",
+   "type": "passkey",
+   "fields": {
+    "credential_id": "ZXhpc3RpbmctY3JlZA",
+    "rp_id": "old.example.com"
+   }
+  }
+ },
+ "failed": [
+  "Broken",
+  "Legacy"
+ ],
+ "lines": [
+  {
+   "action": "skip",
+   "id": "sec-gh",
+   "name": "GitHub"
+  },
+  {
+   "action": "add",
+   "id": "new-1",
+   "name": "Example",
+   "type": "password",
+   "contexts": [
+    "ctx-ex"
+   ],
+   "notes": "from Google",
+   "fields": {
+    "username": "me@example.com",
+    "password": "ex-pass"
+   }
+  },
+  {
+   "action": "add",
+   "id": "new-3",
+   "name": "Example App",
+   "type": "password",
+   "contexts": [
+    "new-2"
+   ],
+   "fields": {
+    "username": "app-user",
+    "password": "app-pass"
+   }
+  },
+  {
+   "action": "add",
+   "id": "new-4",
+   "name": "Example",
+   "type": "totp",
+   "contexts": [
+    "ctx-ex"
+   ],
+   "fields": {
+    "secret": "JBSWY3DPEHPK3PXQ",
+    "issuer": "Example",
+    "account": "me@example.com"
+   }
+  },
+  {
+   "action": "skip",
+   "id": "sec-card",
+   "name": "My Visa"
+  },
+  {
+   "action": "add",
+   "id": "new-5",
+   "name": "Mastercard",
+   "type": "card",
+   "notes": "work card",
+   "fields": {
+    "cardholder": "Me Myself",
+    "number": "5555555555554444",
+    "expiry": "03/30",
+    "cvc": "987"
+   }
+  },
+  {
+   "action": "add",
+   "id": "new-6",
+   "name": "Example",
+   "type": "passkey",
+   "contexts": [
+    "ctx-ex"
+   ],
+   "fields": {
+    "credential_id": "w7Pmoh8NTF6aewEjRWeJqw",
+    "rp_id": "example.com",
+    "user_handle": "BwcH",
+    "user_name": "me@example.com",
+    "user_display_name": "Me"
+   }
+  },
+  {
+   "action": "add",
+   "id": "new-8",
+   "name": "WebAuthn.io",
+   "type": "passkey",
+   "contexts": [
+    "new-7"
+   ],
+   "fields": {
+    "credential_id": "c3Rvcmlp",
+    "rp_id": "webauthn.io",
+    "user_handle": "BwcH",
+    "user_name": "me@example.com",
+    "user_display_name": "Me"
+   }
+  },
+  {
+   "action": "skip",
+   "id": "sec-pk",
+   "name": "Old"
+  },
+  {
+   "action": "add",
+   "id": "new-9",
+   "name": "Door codes",
+   "type": "note",
+   "notes": "front 1234",
+   "fields": {}
+  }
+ ],
+ "new_contexts": {
+  "new-2": {
+   "kind": "context",
+   "name": "Example App",
+   "context_type": "app",
+   "urls": []
+  },
+  "new-7": {
+   "kind": "context",
+   "name": "webauthn.io",
+   "context_type": "website",
+   "urls": [
+    "https://webauthn.io"
+   ]
+  }
+ }
+}

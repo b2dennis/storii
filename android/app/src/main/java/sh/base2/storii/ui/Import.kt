@@ -39,7 +39,14 @@ import androidx.navigation.NavController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.credentials.providerevents.ProviderEventsManager
+import androidx.credentials.providerevents.exception.ImportCredentialsCancellationException
+import androidx.credentials.providerevents.exception.ImportCredentialsException
+import androidx.credentials.providerevents.exception.ImportCredentialsNoExportOptionException
+import androidx.credentials.providerevents.transfer.CredentialTypes
+import androidx.credentials.providerevents.transfer.ImportCredentialsRequest
 import sh.base2.storii.core.BitwardenImport
+import sh.base2.storii.core.CxfImport
 import sh.base2.storii.core.OnePasswordImport
 import sh.base2.storii.core.Import
 import sh.base2.storii.core.OtpImport
@@ -55,8 +62,9 @@ private sealed interface ImportState {
     data object Start : ImportState
     data object Working : ImportState
     /** [what] names a row: "login", "2FA code" or (Bitwarden, which has all kinds) "item". */
-    data class Ready(val uri: Uri, val plan: Import.Plan, val rows: Int, val what: String = "login", val unreadable: List<String> = emptyList()) : ImportState
-    data class Done(val uri: Uri, val lines: Import.Plan, val deleted: Boolean?, val what: String = "login") : ImportState
+    /** [uri] is the export file, or null for a transfer from another app (nothing to delete then). */
+    data class Ready(val uri: Uri?, val plan: Import.Plan, val rows: Int, val what: String = "login", val unreadable: List<String> = emptyList()) : ImportState
+    data class Done(val uri: Uri?, val lines: Import.Plan, val deleted: Boolean?, val what: String = "login") : ImportState
     /** An Authy export: its secrets are encrypted with the Authy backup password. */
     data class AuthyPassword(val uri: Uri, val text: String, val error: String? = null) : ImportState
     data class Failed(val message: String) : ImportState
@@ -105,6 +113,31 @@ fun ImportScreen(nav: NavController, shared: String?) {
             }
         }
     }
+    /** Android's credential transfer: the user picks an app (Google Password Manager, say) that hands everything over. */
+    fun transfer() {
+        state = ImportState.Working
+        scope.launch {
+            state = try {
+                val response = ProviderEventsManager.create(ctx).importCredentials(ctx, ImportCredentialsRequest(
+                    setOf(CredentialTypes.CREDENTIAL_TYPE_BASIC_AUTH, CredentialTypes.CREDENTIAL_TYPE_PUBLIC_KEY,
+                        CredentialTypes.CREDENTIAL_TYPE_TOTP, CredentialTypes.CREDENTIAL_TYPE_CREDIT_CARD, CredentialTypes.CREDENTIAL_TYPE_NOTE),
+                    emptySet()))
+                val parsed = withContext(Dispatchers.Default) { CxfImport.parse(response.response.responseJson) }
+                ImportState.Ready(null, BitwardenImport.build(items(), parsed, ::newId), parsed.count, "item", parsed.failed)
+            } catch (e: ImportCredentialsCancellationException) {
+                ImportState.Start
+            } catch (e: ImportCredentialsNoExportOptionException) {
+                ImportState.Failed("No app on this phone offers its passwords for transfer yet. Use an export file instead.")
+            } catch (e: ImportCredentialsException) {
+                ImportState.Failed("The transfer didn't work: ${e.message ?: e.type}")
+            } catch (e: Import.NotAnExport) {
+                ImportState.Failed(e.message!!)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                ImportState.Failed("The transfer didn't work: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(::load) }
     LaunchedEffect(shared) { shared?.let { load(Uri.parse(it)) } }
 
@@ -115,7 +148,14 @@ fun ImportScreen(nav: NavController, shared: String?) {
         Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             when (val s = state) {
                 ImportState.Start, is ImportState.Failed -> {
-                    Text("From Google Password Manager", style = MaterialTheme.typography.titleMedium)
+                    if (s is ImportState.Failed) Text(s.message, color = MaterialTheme.colorScheme.error)
+                    Text("From another app on this phone", style = MaterialTheme.typography.titleMedium)
+                    Text("Google Password Manager and other password managers can hand everything to storii directly: " +
+                        "passwords, passkeys, 2FA codes, cards and notes, with no file in between. Choose the app on the " +
+                        "next screen and confirm with your screen lock.")
+                    Button(onClick = ::transfer, Modifier.fillMaxWidth()) { Text("Import from another app") }
+                    HorizontalDivider()
+                    Text("From Google Password Manager (file)", style = MaterialTheme.typography.titleMedium)
                     Text("1. Open Google Password Manager: in the Settings app search for \"Password Manager\", or open it " +
                         "from Chrome › Settings › Google Password Manager.\n" +
                         "2. Tap Settings (the gear) › Export passwords, and confirm with your screen lock.\n" +
@@ -133,7 +173,6 @@ fun ImportScreen(nav: NavController, shared: String?) {
                         "the file you get back holds your 2FA codes, encrypted with your Authy backup password. Choose it " +
                         "below. Lists of otpauth:// links (from Aegis, 2FAS and others) work too.",
                         style = MaterialTheme.typography.bodyMedium)
-                    if (s is ImportState.Failed) Text(s.message, color = MaterialTheme.colorScheme.error)
                     Button(onClick = { pick.launch(arrayOf("text/*", "application/csv", "application/json", "application/vnd.ms-excel", "application/zip", "application/octet-stream")) },
                         Modifier.fillMaxWidth()) { Text("Choose export file") }
                 }
@@ -159,8 +198,9 @@ fun ImportScreen(nav: NavController, shared: String?) {
                     if (s.unreadable.isNotEmpty()) Text("Couldn't read ${n(s.unreadable.size, what)}: ${s.unreadable.joinToString("; ")}",
                         color = MaterialTheme.colorScheme.error)
                     if (add + users == 0) {
-                        Text("Everything in this file is already in storii.")
-                        DeleteFile(s.uri) { state = ImportState.Done(s.uri, p, it, s.what) }
+                        Text(if (s.uri == null) "Everything is already in storii." else "Everything in this file is already in storii.")
+                        if (s.uri != null) DeleteFile(s.uri) { state = ImportState.Done(s.uri, p, it, s.what) }
+                        else OutlinedButton(onClick = { state = ImportState.Start }, Modifier.fillMaxWidth()) { Text("Back") }
                     } else {
                         Button(onClick = {
                             state = ImportState.Working
@@ -178,8 +218,9 @@ fun ImportScreen(nav: NavController, shared: String?) {
                 is ImportState.Done -> {
                     Text("Imported ${n(s.lines.count(Import.Action.ADD), s.what)}" +
                         (s.lines.count(Import.Action.USERNAME).takeIf { it > 0 }?.let { " and filled in ${n(it, "username")}" } ?: "") + ".")
-                    when (s.deleted) {
-                        true -> Text("The export file is deleted.")
+                    when {
+                        s.uri == null -> {}
+                        s.deleted == true -> Text("The export file is deleted.")
                         else -> {
                             Text("The export file holds your secrets. Delete it now" +
                                 (if (s.deleted == false) ": storii couldn't, so delete it in your Files app." else "."),

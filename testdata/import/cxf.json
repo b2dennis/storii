@@ -1,0 +1,266 @@
+{
+ "version": {
+  "major": 1,
+  "minor": 0
+ },
+ "exporterRpId": "passwords.google.com",
+ "exporterDisplayName": "Google Password Manager",
+ "timestamp": 1755129600,
+ "accounts": [
+  {
+   "id": "AQID",
+   "username": "",
+   "email": "me@example.com",
+   "collections": [],
+   "items": [
+    {
+     "id": "AQ",
+     "creationAt": 1755129600,
+     "modifiedAt": 1755129600,
+     "title": "GitHub",
+     "credentials": [
+      {
+       "type": "basic-auth",
+       "username": {
+        "fieldType": "string",
+        "value": "dennis"
+       },
+       "password": {
+        "fieldType": "concealed-string",
+        "value": "gh-pass"
+       }
+      }
+     ],
+     "scope": {
+      "urls": [
+       "https://github.com/login"
+      ],
+      "androidApps": []
+     }
+    },
+    {
+     "id": "Ag",
+     "creationAt": 1755129600,
+     "modifiedAt": 1755129600,
+     "title": "Example",
+     "credentials": [
+      {
+       "type": "basic-auth",
+       "username": {
+        "fieldType": "string",
+        "value": "me@example.com"
+       },
+       "password": {
+        "fieldType": "concealed-string",
+        "value": "ex-pass"
+       }
+      },
+      {
+       "type": "totp",
+       "secret": "JBSWY3DPEHPK3PXQ",
+       "period": 30,
+       "digits": 6,
+       "algorithm": "sha1",
+       "issuer": "Example"
+      },
+      {
+       "type": "note",
+       "content": {
+        "fieldType": "string",
+        "value": "from Google"
+       }
+      }
+     ],
+     "scope": {
+      "urls": [
+       "https://example.com"
+      ],
+      "androidApps": []
+     }
+    },
+    {
+     "id": "Aw",
+     "creationAt": 1755129600,
+     "modifiedAt": 1755129600,
+     "title": "Example App",
+     "credentials": [
+      {
+       "type": "basic-auth",
+       "username": {
+        "fieldType": "string",
+        "value": "app-user"
+       },
+       "password": {
+        "fieldType": "concealed-string",
+        "value": "app-pass"
+       }
+      }
+     ],
+     "scope": {
+      "urls": [],
+      "androidApps": [
+       {
+        "bundleId": "com.example.app",
+        "name": "Example App"
+       }
+      ]
+     }
+    },
+    {
+     "id": "BA",
+     "creationAt": 1755129600,
+     "modifiedAt": 1755129600,
+     "title": "Example",
+     "credentials": [
+      {
+       "type": "passkey",
+       "credentialId": "w7Pmoh8NTF6aewEjRWeJqw",
+       "rpId": "example.com",
+       "username": "me@example.com",
+       "userDisplayName": "Me",
+       "userHandle": "BwcH",
+       "key": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgvRUzLmT0euVDz7Vhzschy7nYFtMaTpREe27n6c5lasuhRANCAARAMIEkdk5zNiKX5FWpV6NyuPRBAfvOvpzqfHymwVE0w9eDY06qLWMStifTA6qS42vzunIHFN-j0VZfuzhvMkPR"
+      }
+     ],
+     "scope": {
+      "urls": [
+       "https://example.com"
+      ],
+      "androidApps": []
+     }
+    },
+    {
+     "id": "BQ",
+     "creationAt": 1755129600,
+     "modifiedAt": 1755129600,
+     "title": "WebAuthn.io",
+     "credentials": [
+      {
+       "type": "passkey",
+       "credentialId": "c3Rvcmlp",
+       "rpId": "WebAuthn.io",
+       "username": "me@example.com",
+       "userDisplayName": "Me",
+       "userHandle": "BwcH",
+       "key": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgvRUzLmT0euVDz7Vhzschy7nYFtMaTpREe27n6c5lasuhRANCAARAMIEkdk5zNiKX5FWpV6NyuPRBAfvOvpzqfHymwVE0w9eDY06qLWMStifTA6qS42vzunIHFN-j0VZfuzhvMkPR"
+      }
+     ]
+    },
+    {
+     "id": "Bg",
+     "creationAt": 1755129600,
+     "modifiedAt": 1755129600,
+     "title": "Old",
+     "credentials": [
+      {
+       "type": "passkey",
+       "credentialId": "ZXhpc3RpbmctY3JlZA",
+       "rpId": "old.example.com",
+       "username": "me@example.com",
+       "userDisplayName": "Me",
+       "userHandle": "BwcH",
+       "key": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgvRUzLmT0euVDz7Vhzschy7nYFtMaTpREe27n6c5lasuhRANCAARAMIEkdk5zNiKX5FWpV6NyuPRBAfvOvpzqfHymwVE0w9eDY06qLWMStifTA6qS42vzunIHFN-j0VZfuzhvMkPR"
+      }
+     ]
+    },
+    {
+     "id": "Bw",
+     "creationAt": 1755129600,
+     "modifiedAt": 1755129600,
+     "title": "Broken",
+     "credentials": [
+      {
+       "type": "passkey",
+       "credentialId": "YnJva2Vu",
+       "rpId": "broken.example.com",
+       "username": "me",
+       "userDisplayName": "Me",
+       "userHandle": "BwcH",
+       "key": "AAAA"
+      }
+     ]
+    },
+    {
+     "id": "CA",
+     "creationAt": 1755129600,
+     "modifiedAt": 1755129600,
+     "title": "Legacy",
+     "credentials": [
+      {
+       "type": "totp",
+       "secret": "JBSWY3DPEHPK3PXP",
+       "period": 30,
+       "digits": 6,
+       "algorithm": "md5",
+       "issuer": "Legacy"
+      }
+     ]
+    },
+    {
+     "id": "CQ",
+     "creationAt": 1755129600,
+     "modifiedAt": 1755129600,
+     "title": "My Visa",
+     "credentials": [
+      {
+       "type": "credit-card",
+       "number": {
+        "fieldType": "concealed-string",
+        "value": "4111 1111 1111 1111"
+       }
+      }
+     ]
+    },
+    {
+     "id": "Cg",
+     "creationAt": 1755129600,
+     "modifiedAt": 1755129600,
+     "title": "Mastercard",
+     "credentials": [
+      {
+       "type": "credit-card",
+       "number": {
+        "fieldType": "concealed-string",
+        "value": "5555555555554444"
+       },
+       "fullName": {
+        "fieldType": "string",
+        "value": "Me Myself"
+       },
+       "verificationNumber": {
+        "fieldType": "concealed-string",
+        "value": "987"
+       },
+       "expiryDate": {
+        "fieldType": "year-month",
+        "value": "2030-03"
+       }
+      },
+      {
+       "type": "note",
+       "content": {
+        "fieldType": "string",
+        "value": "work card"
+       }
+      }
+     ]
+    },
+    {
+     "id": "Cw",
+     "creationAt": 1755129600,
+     "modifiedAt": 1755129600,
+     "title": "Door codes",
+     "credentials": [
+      {
+       "type": "note",
+       "content": {
+        "fieldType": "string",
+        "value": "front 1234"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

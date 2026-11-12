@@ -57,7 +57,7 @@ const value = (page, sel) => page.$eval(sel, (e) => e.value);
 
 test('Firefox: register in the popup, autofill, save prompt, lock', { timeout: 180000 }, async (t) => {
   if (skip) return t.skip(skip);
-  const popup = await browser.newPage();
+  let popup = await browser.newPage();
   // The popup re-renders after saves and syncs: retry a click that hit an element that was just replaced.
   const type = async (sel, text) => {
     await popup.waitForSelector(sel);
@@ -80,6 +80,32 @@ test('Firefox: register in the popup, autofill, save prompt, lock', { timeout: 1
   for (const [sel, v] of [['#server', SERVER], ['#user', USER], ['#pw', MASTER], ['#pw2', MASTER]]) await type(sel, v);
   await click('#go');
   await popup.waitForSelector('#q', { timeout: 60000 });
+
+  // Passkey unlock is set up in a storii window (Firefox closes the toolbar popup during the passkey dialog), for the
+  // server's host as relying party. That needs a domain name (the test server is on localhost), and Firefox before 150
+  // refuses it with a SecurityError ("The operation is insecure"), for which storii says to update.
+  await click('#settings');
+  await click('#quick');
+  // Firefox doesn't report extension page loads over BiDi: look for the window by its location.
+  let win;
+  for (let i = 0; i < 50 && !win; i++) {
+    await sleep(200);
+    for (const p of await browser.pages()) {
+      if (await p.evaluate(() => location.href).catch(() => '').then((u) => u.includes('setup=quick'))) win = p;
+    }
+  }
+  assert.ok(win, 'the setup window opened');
+  await win.waitForFunction(() => document.querySelector('#qerr')?.textContent || document.querySelector('#quick')?.checked, null, { timeout: 15000 })
+    .catch(() => {});
+  const qerr = await win.$eval('#qerr', (d) => d.textContent).catch(() => '');
+  assert.doesNotMatch(qerr, /insecure/);
+  assert.match(qerr, /domain name|version 150 or later/);
+  await win.close();
+  // The popup closed itself when it opened the window, as the toolbar popup does.
+  popup = await browser.newPage();
+  await popup.goto(`moz-extension://${UUID}/popup/popup.html`, { timeout: 5000 }).catch(() => {});
+  await popup.waitForSelector('#q');
+
 
   await click('#ctxs');
   await click('#add');

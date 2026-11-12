@@ -41,6 +41,7 @@ async function quick(q) {
   $('err').textContent = '';
   try {
     const cred = await navigator.credentials.get({ publicKey: {
+      ...(q.rpId ? { rpId: q.rpId } : {}),
       challenge: crypto.getRandomValues(new Uint8Array(32)),
       allowCredentials: [{ type: 'public-key', id: unb64(q.credentialId) }],
       userVerification: 'required',

@@ -48,8 +48,13 @@ Done: unlocking inline from the page picker (2026-11-12): "Unlock storii" turns 
 (web_accessible unlock/unlock.html, dynamic URL in Chrome) with the master password and "Use passkey"; the page can't
 read it; Chrome e2e covers it, Firefox untested. Android autofill unlock is a translucent overlay (biometric prompt only, or a bottom sheet with the master
 password) — builds, not tried on a device (emulator crashes on this VM). Browser: passkey unlock via WebAuthn PRF
-(popup Settings toggle; locked popup asks right away), e2e with Chromium's virtual authenticator. Open: Firefox
-support for WebAuthn in moz-extension pages (untested), whether the Windows Hello dialog closes the action popup,
+(popup Settings toggle; locked popup asks right away), e2e with Chromium's virtual authenticator. Firefox/Zen: WebAuthn in
+moz-extension pages needs an explicit RP ID for a host the extension may access (Firefox 150+, bug 1956484); without
+one it's "SecurityError: The operation is insecure" (the owner hit this in Zen, 2026-11-12). Fixed after 2.3.0: in
+Firefox the passkey is for the server's host (rpId stored with quickUnlock; Chrome keeps the extension origin), and
+setup/unlock run in a storii window because Firefox closes the toolbar popup during create() (bug 2026687). Needs a
+server with a domain name. Firefox e2e (ESR 140 here) covers the window + error path only; Zen on macOS (Touch ID,
+PRF needs macOS 15+) untested. Open, whether the Windows Hello dialog closes the action popup,
 passkey unlock inside the picker frame (falls back to the popup when the page's permissions policy forbids it).
 
 - Android: unlocking from autofill opens the main app and comes back. Unlock in place instead: the autofill
@@ -68,7 +73,11 @@ Released in 2.2.0: extension (Chrome e2e verified by SimpleWebAuthn; Firefox unt
 Android Credential Manager provider (core/Passkey.kt, passkey/*; unit-tested, not tried on a device), iOS/macOS
 AutoFill passkeys (StoriiCore Passkey.swift tested on Linux, app compiles; not tried on a device), Bitwarden JSON
 import of logins, 2FA codes, cards and passkeys (Go + Kotlin, shared cases testdata/import/bitwarden*.json; not yet
-tried with a real Bitwarden export). Open: CXP import, Windows (5).
+tried with a real Bitwarden export). Android credential transfer import DONE 2026-11-12 (after 2.3.0, uncommitted):
+Import › "Import from another app" calls androidx.credentials.providerevents (1.0.0-beta01, + play-services) and parses
+the CXF 1.0 JSON (core/CxfImport.kt: logins, passkeys, 2FA codes, cards, notes; tolerates a CXP payload envelope);
+shared cases testdata/import/cxf*.json; unit-tested, not tried on a device or with Google Password Manager. storii is
+not an exporter (yet). Open: iOS 26 ASCredentialImportManager, Windows (5).
 Done: `passkey` type everywhere (Go/CLI/tray/Android/iOS list it read-only; Android edit keeps its fields), extension
 creates/uses passkeys via a MAIN-world navigator.credentials hook + approval window (fallback to the browser's own
 dialog; conditional mediation left to the browser). Open: Android Credential Manager provider (step 2), iOS (step 4),

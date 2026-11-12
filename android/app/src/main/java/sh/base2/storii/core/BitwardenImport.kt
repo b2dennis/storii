@@ -17,6 +17,7 @@ import java.util.Base64
 object BitwardenImport {
     data class CardRow(val name: String, val cardholder: String, val number: String, val expiry: String, val cvc: String, val note: String)
     data class PasskeyRow(val name: String, val fields: Map<String, String>)
+    data class NoteRow(val name: String, val text: String)
 
     data class Parsed(
         val logins: List<Import.Row>,
@@ -25,8 +26,10 @@ object BitwardenImport {
         val passkeys: List<PasskeyRow>,
         /** Entries storii couldn't read, with the reason in brackets. */
         val failed: List<String>,
+        /** Secure notes (only from a credential transfer so far). */
+        val notes: List<NoteRow> = emptyList(),
     ) {
-        val count get() = logins.size + codes.size + cards.size + passkeys.size
+        val count get() = logins.size + codes.size + cards.size + passkeys.size + notes.size
     }
 
     class Encrypted : Exception("This Bitwarden export is encrypted. Export again with the file format \".json\", not \".json (Encrypted)\".")
@@ -93,7 +96,7 @@ object BitwardenImport {
     private val guid = Regex("^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$")
 
     /** Credential ids are GUIDs (16 bytes) or "b64."-prefixed base64url; the key is PKCS#8 in base64url. */
-    private fun passkey(credId: String, alg: String, curve: String, key: String, userHandle: String): Map<String, String> {
+    internal fun passkey(credId: String, alg: String, curve: String, key: String, userHandle: String): Map<String, String> {
         require(alg.equals("ECDSA", true) && curve.equals("P-256", true)) { "unsupported key type $alg $curve" }
         val id = runCatching {
             when {
@@ -121,7 +124,8 @@ object BitwardenImport {
 
     /**
      * Matches everything against the vault: logins (as [Import.build]), 2FA codes (as [OtpImport.build]), then cards
-     * (skipped when a card with the same number exists) and passkeys (skipped when the credential id exists).
+     * (skipped when a card with the same number exists), passkeys (skipped when the credential id exists) and notes
+     * (skipped when a note with the same name and text exists).
      */
     fun build(existing: Map<String, Item>, p: Parsed, newId: () -> String, now: String = Item.now()): Import.Plan {
         val items = existing.toMutableMap()
@@ -169,6 +173,17 @@ object BitwardenImport {
             put(id, Item(kind = Item.KIND_SECRET, type = Item.PASSKEY, name = pk.name, contexts = listOf(ctx), fields = pk.fields,
                 createdAt = now, updatedAt = now))
             lines += Import.Line(Import.Action.ADD, id, pk.name, rp)
+        }
+
+        for (n in p.notes) {
+            val dup = items.keys.sorted().firstOrNull { id ->
+                val it = items.getValue(id)
+                it.isSecret && it.type == Item.NOTE && it.name == n.name && it.notes.orEmpty() == n.text
+            }
+            if (dup != null) { lines += Import.Line(Import.Action.SKIP, dup, n.name); continue }
+            val id = newId()
+            put(id, Item(kind = Item.KIND_SECRET, type = Item.NOTE, name = n.name, notes = n.text, createdAt = now, updatedAt = now))
+            lines += Import.Line(Import.Action.ADD, id, n.name)
         }
         return Import.Plan(writes, lines)
     }

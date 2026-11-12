@@ -12,8 +12,8 @@ android {
         applicationId = "sh.base2.storii"
         minSdk = 29
         targetSdk = 37
-        versionCode = 4
-        versionName = "2.3.0"
+        versionCode = 5
+        versionName = "2.4.0"
     }
 
     buildTypes {
@@ -47,6 +47,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.providerevents)
+    implementation(libs.androidx.credentials.providerevents.play.services)
     implementation(libs.androidx.autofill)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

@@ -54,6 +54,10 @@ header h1 small { color: var(--muted); font-weight: 400; font-size: 12px; margin
 .muted { color: var(--muted); }
 .small { font-size: 12px; }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.toggle { display: flex; flex-direction: column; gap: 4px; }
+.toggle label { flex-direction: row; align-items: center; gap: 8px; font-size: 14px; color: var(--text); }
+.toggle input[type=checkbox] { width: auto; margin: 0; padding: 0; flex: none; }
+.toggle label:has(input:disabled) { opacity: .6; }
 input, select, textarea {
   font: inherit;
   color: var(--text);

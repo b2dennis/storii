@@ -184,12 +184,13 @@ async function quickKey(prf) {
     { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(32), info: new TextEncoder().encode('storii:quick-unlock') }, k, 256));
 }
 
-async function quickUnlockSetup({ prf, credentialId, salt }) {
+async function quickUnlockSetup({ prf, credentialId, salt, rpId }) {
   const vaultKey = await getVaultKey();
   if (!vaultKey) throw new Error('locked');
   const state = await getState();
   const wrapped = await seal(await quickKey(prf), vaultKey, 'storii:quick-unlock');
-  await chrome.storage.local.set({ quickUnlock: { credentialId, salt, wrapped, account: `${state.username}@${state.server}` } });
+  // rpId: Firefox's passkey belongs to the server's host (see popup.js); Chrome's to the extension itself.
+  await chrome.storage.local.set({ quickUnlock: { credentialId, salt, wrapped, rpId, account: `${state.username}@${state.server}` } });
 }
 
 async function quickUnlock({ prf }) {
@@ -547,7 +548,7 @@ const popupHandlers = {
   quickUnlockSetup,
   async quickUnlockInfo() {
     const { quickUnlock: q } = await chrome.storage.local.get('quickUnlock');
-    return q ? { credentialId: q.credentialId, salt: q.salt } : null;
+    return q ? { credentialId: q.credentialId, salt: q.salt, rpId: q.rpId } : null;
   },
   async quickUnlockOff() {
     await chrome.storage.local.remove('quickUnlock');
