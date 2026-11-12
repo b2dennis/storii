@@ -11,7 +11,7 @@ packages:
     path: StoriiCore
 settings:
   base:
-    MARKETING_VERSION: "2.2"
+    MARKETING_VERSION: "2.3"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "6.0"
 targets:
@@ -54,6 +54,7 @@ targets:
             ASCredentialProviderExtensionCapabilities:
               ProvidesPasswords: true
               ProvidesOneTimeCodes: true
+              ProvidesPasskeys: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: sh.base2.storii.autofill
@@ -109,6 +110,7 @@ targets:
             ASCredentialProviderExtensionCapabilities:
               ProvidesPasswords: true
               ProvidesOneTimeCodes: true
+              ProvidesPasskeys: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: sh.base2.storii.autofill

@@ -250,12 +250,15 @@ class Vault(private val ctx: Context) {
     }
 
     /** Saves a login captured by autofill: updates the password of a known username, or adds a new secret. */
-    suspend fun saveLogin(webHost: String?, androidPackage: String?, appLabel: String?, username: String, password: String) {
+    /**
+     * Saves a submitted login. [changed] means it came from a new-password field (signup, reset, change password): with
+     * no username, it updates the login whose password was [current], or the site's only login.
+     */
+    suspend fun saveLogin(webHost: String?, androidPackage: String?, appLabel: String?, username: String, password: String,
+                          changed: Boolean = false, current: String = "") {
         val known = forTarget(webHost, androidPackage).filter { it.item.type == Item.PASSWORD }
         if (known.any { it.item.field("password") == password && (username.isEmpty() || it.item.field("username") == username) }) return
-        val same = known.firstOrNull { username.isNotEmpty() && it.item.field("username") == username }
-            // A login without a username (e.g. migrated from v1) used with this password: add the username to it.
-            ?: known.firstOrNull { username.isNotEmpty() && it.item.field("username").isEmpty() && it.item.field("password") == password }
+        val same = loginToUpdate(known, username, password, changed, current)
         if (same != null) {
             val fields = same.item.fields + ("password" to password) + (if (username.isNotEmpty()) mapOf("username" to username) else emptyMap())
             put(same.id, same.item.copy(fields = fields))
@@ -265,5 +268,15 @@ class Vault(private val ctx: Context) {
         val id = put(null, Item(kind = Item.KIND_SECRET, type = Item.PASSWORD, name = name,
             fields = buildMap { if (username.isNotEmpty()) put("username", username); put("password", password) }))
         remember(id, webHost, androidPackage, appLabel)
+    }
+
+    companion object {
+        fun loginToUpdate(known: List<Entry>, username: String, password: String, changed: Boolean, current: String): Entry? =
+            known.firstOrNull { username.isNotEmpty() && it.item.field("username") == username }
+                // A login without a username (e.g. migrated from v1) used with this password: add the username to it.
+                ?: known.firstOrNull { username.isNotEmpty() && it.item.field("username").isEmpty() && it.item.field("password") == password }
+                ?: if (changed && username.isEmpty()) {
+                    known.firstOrNull { current.isNotEmpty() && it.item.field("password") == current } ?: known.singleOrNull()
+                } else null
     }
 }

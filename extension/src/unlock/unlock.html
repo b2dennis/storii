@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Unlock storii</title>
+  <link rel="stylesheet" href="unlock.css">
+</head>
+<body>
+  <form id="f">
+    <div class="t">Unlock storii</div>
+    <div class="s" id="who"></div>
+    <input id="pw" type="password" autocomplete="current-password" placeholder="Master password" aria-label="Master password">
+    <div class="err" id="err" role="alert"></div>
+    <div class="row">
+      <button type="button" id="quick" hidden>Use passkey</button>
+      <button type="submit" class="primary" id="go">Unlock</button>
+    </div>
+  </form>
+  <script type="module" src="unlock.js"></script>
+</body>
+</html>

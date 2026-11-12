@@ -15,7 +15,9 @@ import (
 )
 
 // cmdImport brings logins over from a CSV export (Google Password Manager, Chrome, Firefox, Bitwarden, 1Password),
-// and 2FA secrets from Authy exports or lists of otpauth:// URIs.
+// everything (logins, 2FA codes, cards, passkeys) from a Bitwarden JSON export, logins, 2FA codes and cards from a
+// 1Password .1pux export, and 2FA secrets from Authy exports
+// or lists of otpauth:// URIs.
 func cmdImport(ctx context.Context, v *client.Vault, args []string) error {
 	fs := flag.NewFlagSet("import", flag.ContinueOnError)
 	dry := fs.Bool("dry-run", false, "list what would happen, but don't upload")
@@ -32,7 +34,20 @@ func cmdImport(ctx context.Context, v *client.Vault, args []string) error {
 	}
 	var plan importer.Plan
 	rows := 0
-	if kind := importer.Detect(data); kind == importer.KindLogins {
+	if kind := importer.Detect(data); kind == importer.KindBitwarden || kind == importer.KindOnePassword {
+		parse := importer.ParseBitwarden
+		if kind == importer.KindOnePassword {
+			parse = importer.ParseOnePassword
+		}
+		b, err := parse(data)
+		if err != nil {
+			return err
+		}
+		for _, f := range b.Failed {
+			fmt.Printf("  could not read: %s\n", f)
+		}
+		rows, plan = b.Count(), b.Build(v.Items, uuid.NewString, time.Now())
+	} else if kind == importer.KindLogins {
 		logins, err := importer.ParseCSV(bytes.NewReader(data))
 		if err != nil {
 			return err

@@ -4,7 +4,7 @@
 import { deriveKeys, newKdf, randomBytes, toB64, fromB64, wrapVaultKey, unwrapVaultKey, encryptItem, decryptItem, seal, open } from './lib/crypto.js';
 import { contextMatches, host as hostOf } from './lib/match.js';
 import { totpFromFields, totpCode } from './lib/totp.js';
-import { cardBrand, cardDigits } from './lib/card.js';
+import { cardBrand, cardDigits, cardValid, normalizeExpiry } from './lib/card.js';
 import { createPasskey, assertPasskey, rpIdAllowed } from './lib/passkey.js';
 
 const DEFAULT_LOCK_MINUTES = 15;
@@ -274,8 +274,11 @@ function senderHost(sender) {
   return hostOf(sender.url || sender.origin || '');
 }
 
+// The popup and storii's own windows, and the unlock frame inside the page picker (Chrome serves that one from a
+// per-session dynamic id, so the URL can't be compared with getURL; no other extension's pages carry our id).
 function isExtensionPage(sender) {
-  return sender.id === chrome.runtime.id && (sender.url || '').startsWith(chrome.runtime.getURL(''));
+  return sender.id === chrome.runtime.id && (sender.url || '').startsWith(chrome.runtime.getURL('')) ||
+    (sender.id === chrome.runtime.id && /^(chrome|moz)-extension:\/\/[^/]+\/unlock\/unlock\.html/.test(sender.url || ''));
 }
 
 // Logins submitted in a tab that aren't in the vault yet, offered for saving on the next page.
@@ -337,12 +340,28 @@ async function pendingFor(tabId) {
   return p || null;
 }
 
+// A card typed into a checkout that storii doesn't have yet: offered for saving like a login.
+async function noteCard(sender, card) {
+  if (!sender.tab || !cardValid(card?.number)) return;
+  const number = cardDigits(card.number);
+  const all = await items();
+  if (all && [...all.values()].some((it) => it.type === 'card' && cardDigits(it.fields?.number) === number)) return;
+  await pendingSaves.set(sender.tab.id, { kind: 'card', host: senderHost(sender), at: Date.now(),
+    card: { number, cardholder: (card.cardholder || '').trim(), expiry: normalizeExpiry(card.expiry || ''), cvc: (card.cvc || '').trim() } });
+}
+
 async function savePending(tabId) {
   const p = await pendingFor(tabId);
   if (!p) return null;
   await pendingSaves.delete(tabId);
   const all = await items();
   if (!all) throw new Error('locked');
+  if (p.kind === 'card') {
+    const brand = cardBrand(p.card.number);
+    const fields = Object.fromEntries(Object.entries(p.card).filter(([, v]) => v));
+    const name = `${brand ? brand[0].toUpperCase() + brand.slice(1) : 'Card'} ${p.card.number.slice(-4)}`;
+    return (await write([{ id: undefined, item: { kind: 'secret', type: 'card', name, fields } }]))[0];
+  }
   if (p.existingId) {
     const s = all.get(p.existingId);
     const fields = { ...s.fields, password: p.password };
@@ -484,6 +503,9 @@ const handlers = {
     if (s.type === 'totp') return { code: await totpCode(totpFromFields(s.fields)) };
     return { username: s.fields?.username || '', password: s.fields?.password || '' };
   },
+  async cardSubmitted({ card }, sender) {
+    await noteCard(sender, card);
+  },
   async submitted(msg, sender) {
     await noteSubmission(sender, msg);
   },
@@ -495,6 +517,7 @@ const handlers = {
     // offer it on the page the tab ends up on. Same site for 5 minutes, any site for the first minute.
     const here = senderHost(sender);
     if (here !== p.host && siteOf(here) !== siteOf(p.host) && Date.now() - p.at > 60 * 1000) return null;
+    if (p.kind === 'card') return { host: p.host, card: { brand: cardBrand(p.card.number), last4: p.card.number.slice(-4) } };
     return { host: p.host, username: p.username, update: !!p.existingId };
   },
   async confirmSave({ save }, sender) {

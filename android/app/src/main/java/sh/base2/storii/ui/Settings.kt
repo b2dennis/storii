@@ -89,6 +89,15 @@ fun SettingsScreen(nav: NavController, activity: FragmentActivity) {
             if (!autofillOn) Button(onClick = {
                 ctx.startActivity(Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE).setData(Uri.parse("package:${ctx.packageName}")))
             }) { Text("Use storii for autofill") }
+            if (android.os.Build.VERSION.SDK_INT >= 34) {
+                Text("Passkeys", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+                Text("Apps and browsers can save passkeys in storii and sign in with them. Turn storii on under " +
+                    "Passwords, passkeys & accounts.", style = MaterialTheme.typography.bodyMedium)
+                OutlinedButton(onClick = {
+                    runCatching { androidx.credentials.CredentialManager.create(ctx).createSettingsPendingIntent().send() }
+                        .onFailure { ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_SETTINGS)) }
+                }) { Text("Passkey settings") }
+            }
             HorizontalDivider()
 
             Text("Unlocking", style = MaterialTheme.typography.titleMedium)

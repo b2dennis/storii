@@ -28,10 +28,14 @@ const base = {
 };
 
 const targets = {
-  chrome: { ...base, background: { service_worker: 'background.js', type: 'module' }, minimum_chrome_version: '116' },
+  chrome: { ...base, background: { service_worker: 'background.js', type: 'module' }, minimum_chrome_version: '116',
+    // The picker's unlock frame; the dynamic URL keeps sites from probing whether storii is installed.
+    web_accessible_resources: [{ resources: ['unlock/*'], matches: ['<all_urls>'], use_dynamic_url: true }] },
   firefox: {
     ...base,
     background: { scripts: ['background.js'], type: 'module' },
+    // The picker's unlock frame (Firefox's moz-extension host is already random per install).
+    web_accessible_resources: [{ resources: ['unlock/*'], matches: ['<all_urls>'] }],
     browser_specific_settings: {
       gecko: {
         id: 'storii@base2.sh',

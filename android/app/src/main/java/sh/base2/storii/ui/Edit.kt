@@ -59,18 +59,8 @@ import sh.base2.storii.core.Totp
 import sh.base2.storii.core.typeLabel
 import sh.base2.storii.data.Vault
 import sh.base2.storii.vault
-import java.security.SecureRandom
+import sh.base2.storii.core.generatePassword
 import java.util.UUID
-
-fun generatePassword(n: Int = 20): String {
-    val sets = listOf("abcdefghijkmnopqrstuvwxyz", "ABCDEFGHJKLMNPQRSTUVWXYZ", "23456789", "!@#$%^&*.()")
-    val all = sets.joinToString("")
-    val r = SecureRandom()
-    while (true) {
-        val p = String(CharArray(n) { all[r.nextInt(all.length)] })
-        if (sets.all { s -> p.any { it in s } }) return p
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable

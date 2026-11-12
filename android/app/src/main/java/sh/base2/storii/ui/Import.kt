@@ -39,6 +39,8 @@ import androidx.navigation.NavController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import sh.base2.storii.core.BitwardenImport
+import sh.base2.storii.core.OnePasswordImport
 import sh.base2.storii.core.Import
 import sh.base2.storii.core.OtpImport
 import sh.base2.storii.data.Vault
@@ -52,8 +54,9 @@ private const val MAX_BYTES = 20 shl 20
 private sealed interface ImportState {
     data object Start : ImportState
     data object Working : ImportState
-    data class Ready(val uri: Uri, val plan: Import.Plan, val rows: Int, val codes: Boolean = false, val unreadable: List<String> = emptyList()) : ImportState
-    data class Done(val uri: Uri, val lines: Import.Plan, val deleted: Boolean?, val codes: Boolean = false) : ImportState
+    /** [what] names a row: "login", "2FA code" or (Bitwarden, which has all kinds) "item". */
+    data class Ready(val uri: Uri, val plan: Import.Plan, val rows: Int, val what: String = "login", val unreadable: List<String> = emptyList()) : ImportState
+    data class Done(val uri: Uri, val lines: Import.Plan, val deleted: Boolean?, val what: String = "login") : ImportState
     /** An Authy export: its secrets are encrypted with the Authy backup password. */
     data class AuthyPassword(val uri: Uri, val text: String, val error: String? = null) : ImportState
     data class Failed(val message: String) : ImportState
@@ -74,7 +77,7 @@ fun ImportScreen(nav: NavController, shared: String?) {
     /** 2FA codes: an Authy export (after its password) or otpauth:// links. */
     suspend fun codes(uri: Uri, text: String, password: String?): ImportState = try {
         val parsed = withContext(Dispatchers.Default) { OtpImport.parse(text, password) }
-        ImportState.Ready(uri, OtpImport.build(items(), parsed.rows, ::newId), parsed.rows.size, codes = true, unreadable = parsed.failed)
+        ImportState.Ready(uri, OtpImport.build(items(), parsed.rows, ::newId), parsed.rows.size, "2FA code", unreadable = parsed.failed)
     } catch (e: OtpImport.NeedPassword) {
         ImportState.AuthyPassword(uri, text)
     } catch (e: OtpImport.WrongPassword) {
@@ -86,11 +89,19 @@ fun ImportScreen(nav: NavController, shared: String?) {
         scope.launch {
             state = runCatching {
                 val text = withContext(Dispatchers.IO) { readText(ctx, uri) }
+                if (OnePasswordImport.detect(text)) {
+                    val op = withContext(Dispatchers.Default) { OnePasswordImport.parse(text) }
+                    return@runCatching ImportState.Ready(uri, BitwardenImport.build(items(), op, ::newId), op.count, "item", op.failed)
+                }
+                if (BitwardenImport.detect(text)) {
+                    val bw = withContext(Dispatchers.Default) { BitwardenImport.parse(text) }
+                    return@runCatching ImportState.Ready(uri, BitwardenImport.build(items(), bw, ::newId), bw.count, "item", bw.failed)
+                }
                 if (OtpImport.detect(text) != OtpImport.Kind.LOGINS) return@runCatching codes(uri, text, null)
                 val rows = Import.parse(text)
                 ImportState.Ready(uri, Import.build(items(), rows, ::newId), rows.size)
             }.getOrElse {
-                ImportState.Failed(if (it is Import.NotAnExport || it is OtpImport.Empty) it.message!! else "Couldn't read that file.")
+                ImportState.Failed(if (it is Import.NotAnExport || it is OtpImport.Empty || it is BitwardenImport.Encrypted) it.message!! else "Couldn't read that file.")
             }
         }
     }
@@ -111,13 +122,19 @@ fun ImportScreen(nav: NavController, shared: String?) {
                         "3. Share the file to storii, or save it and choose it below.")
                     Text("Exports from Chrome, Firefox, Bitwarden and 1Password work too. Logins already in storii are " +
                         "skipped, so you can import again later.", style = MaterialTheme.typography.bodySmall)
+                    Text("Everything from Bitwarden", style = MaterialTheme.typography.titleMedium)
+                    Text("In Bitwarden, open Tools › Export vault and choose the file format \".json\" (not the encrypted " +
+                        "one). storii imports its logins, 2FA codes, cards and passkeys.", style = MaterialTheme.typography.bodyMedium)
+                    Text("Everything from 1Password", style = MaterialTheme.typography.titleMedium)
+                    Text("In the 1Password app, choose File › Export, then the format 1PUX. storii imports its logins, " +
+                        "2FA codes and cards (1Password doesn't export passkeys).", style = MaterialTheme.typography.bodyMedium)
                     Text("2FA codes from Authy", style = MaterialTheme.typography.titleMedium)
                     Text("Authy has no export. Ask Twilio for your data instead (a GDPR request, see the storii README): " +
                         "the file you get back holds your 2FA codes, encrypted with your Authy backup password. Choose it " +
                         "below. Lists of otpauth:// links (from Aegis, 2FAS and others) work too.",
                         style = MaterialTheme.typography.bodyMedium)
                     if (s is ImportState.Failed) Text(s.message, color = MaterialTheme.colorScheme.error)
-                    Button(onClick = { pick.launch(arrayOf("text/*", "application/csv", "application/json", "application/vnd.ms-excel", "application/octet-stream")) },
+                    Button(onClick = { pick.launch(arrayOf("text/*", "application/csv", "application/json", "application/vnd.ms-excel", "application/zip", "application/octet-stream")) },
                         Modifier.fillMaxWidth()) { Text("Choose export file") }
                 }
                 ImportState.Working -> CircularProgressIndicator()
@@ -137,20 +154,20 @@ fun ImportScreen(nav: NavController, shared: String?) {
                     val p = s.plan
                     val add = p.count(Import.Action.ADD)
                     val users = p.count(Import.Action.USERNAME)
-                    val what = if (s.codes) "2FA code" else "login"
+                    val what = s.what
                     Summary(p, s.rows, what)
-                    if (s.unreadable.isNotEmpty()) Text("Couldn't read ${n(s.unreadable.size, what)}: ${s.unreadable.joinToString()}",
+                    if (s.unreadable.isNotEmpty()) Text("Couldn't read ${n(s.unreadable.size, what)}: ${s.unreadable.joinToString("; ")}",
                         color = MaterialTheme.colorScheme.error)
                     if (add + users == 0) {
                         Text("Everything in this file is already in storii.")
-                        DeleteFile(s.uri) { state = ImportState.Done(s.uri, p, it, s.codes) }
+                        DeleteFile(s.uri) { state = ImportState.Done(s.uri, p, it, s.what) }
                     } else {
                         Button(onClick = {
                             state = ImportState.Working
                             scope.launch {
                                 state = runCatching {
                                     vault.write(p.writes.map { (id, it) -> Vault.Change.Put(id, it) })
-                                    ImportState.Done(s.uri, p, null, s.codes)
+                                    ImportState.Done(s.uri, p, null, s.what)
                                 }.getOrElse { ImportState.Failed("Import failed: ${it.message}") }
                             }
                         }, Modifier.fillMaxWidth()) { Text(if (add > 0) "Import ${n(add, what)}" else "Fill in ${n(users, "username")}") }
@@ -159,7 +176,7 @@ fun ImportScreen(nav: NavController, shared: String?) {
                     Lines(p)
                 }
                 is ImportState.Done -> {
-                    Text("Imported ${n(s.lines.count(Import.Action.ADD), if (s.codes) "2FA code" else "login")}" +
+                    Text("Imported ${n(s.lines.count(Import.Action.ADD), s.what)}" +
                         (s.lines.count(Import.Action.USERNAME).takeIf { it > 0 }?.let { " and filled in ${n(it, "username")}" } ?: "") + ".")
                     when (s.deleted) {
                         true -> Text("The export file is deleted.")
@@ -222,8 +239,15 @@ private fun DeleteFile(uri: Uri, done: (Boolean) -> Unit) {
     }, Modifier.fillMaxWidth()) { Text("Delete the export file") }
 }
 
+/** The file as text; for a 1Password .1pux (a zip), its export.data. */
 private fun readText(ctx: Context, uri: Uri): String {
-    val input = ctx.contentResolver.openInputStream(uri) ?: error("Couldn't open that file.")
+    val input = ctx.contentResolver.openInputStream(uri)?.buffered() ?: error("Couldn't open that file.")
+    input.mark(4)
+    val magic = ByteArray(4).also { b -> input.read(b) }
+    input.reset()
+    if (magic.contentEquals(byteArrayOf(0x50, 0x4b, 0x03, 0x04))) {
+        return input.use { OnePasswordImport.unzip(it, MAX_BYTES) } ?: throw Import.NotAnExport("That zip isn't a 1Password export (.1pux).")
+    }
     val out = java.io.ByteArrayOutputStream()
     input.use {
         val buf = ByteArray(64 shl 10)

@@ -1,0 +1,222 @@
+{
+  "encrypted": false,
+  "folders": [],
+  "items": [
+    {
+      "id": "GitHub",
+      "type": 1,
+      "name": "GitHub",
+      "notes": null,
+      "favorite": false,
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://github.com/login"
+          }
+        ],
+        "username": "dennis",
+        "password": "gh-pass",
+        "totp": "otpauth://totp/GitHub:dennis?secret=JBSWY3DPEHPK3PXP&issuer=GitHub",
+        "fido2Credentials": []
+      },
+      "collectionIds": null
+    },
+    {
+      "id": "Example",
+      "type": 1,
+      "name": "Example",
+      "notes": "from Bitwarden",
+      "favorite": false,
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://example.com/signin"
+          }
+        ],
+        "username": "me@example.com",
+        "password": "ex-pass",
+        "totp": "jbsw y3dp ehpk 3pxq",
+        "fido2Credentials": [
+          {
+            "credentialId": "c3b3e6a2-1f0d-4c5e-9a7b-0123456789ab",
+            "keyType": "public-key",
+            "keyAlgorithm": "ECDSA",
+            "keyCurve": "P-256",
+            "keyValue": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgvRUzLmT0euVDz7Vhzschy7nYFtMaTpREe27n6c5lasuhRANCAARAMIEkdk5zNiKX5FWpV6NyuPRBAfvOvpzqfHymwVE0w9eDY06qLWMStifTA6qS42vzunIHFN-j0VZfuzhvMkPR",
+            "rpId": "example.com",
+            "rpName": "Example",
+            "userHandle": "BwcH",
+            "userName": "me@example.com",
+            "userDisplayName": "Me",
+            "counter": "0",
+            "discoverable": "true",
+            "creationDate": "2025-01-02T03:04:05.000Z"
+          }
+        ]
+      },
+      "collectionIds": null
+    },
+    {
+      "id": "WebAuthn.io",
+      "type": 1,
+      "name": "WebAuthn.io",
+      "notes": null,
+      "favorite": false,
+      "login": {
+        "uris": [],
+        "username": null,
+        "password": null,
+        "totp": null,
+        "fido2Credentials": [
+          {
+            "credentialId": "b64.c3Rvcmlp",
+            "keyType": "public-key",
+            "keyAlgorithm": "ECDSA",
+            "keyCurve": "P-256",
+            "keyValue": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgvRUzLmT0euVDz7Vhzschy7nYFtMaTpREe27n6c5lasuhRANCAARAMIEkdk5zNiKX5FWpV6NyuPRBAfvOvpzqfHymwVE0w9eDY06qLWMStifTA6qS42vzunIHFN-j0VZfuzhvMkPR",
+            "rpId": "WebAuthn.io",
+            "rpName": "",
+            "userHandle": "BwcH",
+            "userName": "me@example.com",
+            "userDisplayName": "Me",
+            "counter": "0",
+            "discoverable": "true",
+            "creationDate": "2025-01-02T03:04:05.000Z"
+          }
+        ]
+      },
+      "collectionIds": null
+    },
+    {
+      "id": "Old passkey",
+      "type": 1,
+      "name": "Old passkey",
+      "notes": null,
+      "favorite": false,
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://old.example.com"
+          }
+        ],
+        "username": null,
+        "password": null,
+        "totp": null,
+        "fido2Credentials": [
+          {
+            "credentialId": "b64.ZXhpc3RpbmctY3JlZA",
+            "keyType": "public-key",
+            "keyAlgorithm": "ECDSA",
+            "keyCurve": "P-256",
+            "keyValue": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgvRUzLmT0euVDz7Vhzschy7nYFtMaTpREe27n6c5lasuhRANCAARAMIEkdk5zNiKX5FWpV6NyuPRBAfvOvpzqfHymwVE0w9eDY06qLWMStifTA6qS42vzunIHFN-j0VZfuzhvMkPR",
+            "rpId": "old.example.com",
+            "rpName": "Old",
+            "userHandle": "BwcH",
+            "userName": "me@example.com",
+            "userDisplayName": "Me",
+            "counter": "0",
+            "discoverable": "true",
+            "creationDate": "2025-01-02T03:04:05.000Z"
+          }
+        ]
+      },
+      "collectionIds": null
+    },
+    {
+      "id": "P-384 site",
+      "type": 1,
+      "name": "P-384 site",
+      "notes": null,
+      "favorite": false,
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://p384.example.com"
+          }
+        ],
+        "username": null,
+        "password": null,
+        "totp": null,
+        "fido2Credentials": [
+          {
+            "credentialId": "b64.cDM4NA",
+            "keyType": "public-key",
+            "keyAlgorithm": "ECDSA",
+            "keyCurve": "P-384",
+            "keyValue": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgvRUzLmT0euVDz7Vhzschy7nYFtMaTpREe27n6c5lasuhRANCAARAMIEkdk5zNiKX5FWpV6NyuPRBAfvOvpzqfHymwVE0w9eDY06qLWMStifTA6qS42vzunIHFN-j0VZfuzhvMkPR",
+            "rpId": "p384.example.com",
+            "rpName": "P384",
+            "userHandle": "BwcH",
+            "userName": "me@example.com",
+            "userDisplayName": "Me",
+            "counter": "0",
+            "discoverable": "true",
+            "creationDate": "2025-01-02T03:04:05.000Z"
+          }
+        ]
+      },
+      "collectionIds": null
+    },
+    {
+      "id": "Steam",
+      "type": 1,
+      "name": "Steam",
+      "notes": null,
+      "favorite": false,
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://store.steampowered.com"
+          }
+        ],
+        "username": "gamer",
+        "password": "steam-pass",
+        "totp": "steam://ABCDEFGH",
+        "fido2Credentials": []
+      },
+      "collectionIds": null
+    },
+    {
+      "id": "visa",
+      "type": 3,
+      "name": "My Visa",
+      "notes": null,
+      "card": {
+        "cardholderName": "Me",
+        "brand": "Visa",
+        "number": "4111 1111 1111 1111",
+        "expMonth": "12",
+        "expYear": "2029",
+        "code": "123"
+      }
+    },
+    {
+      "id": "mc",
+      "type": 3,
+      "name": "",
+      "notes": "work card",
+      "card": {
+        "cardholderName": "Me Myself",
+        "brand": "Mastercard",
+        "number": "5555555555554444",
+        "expMonth": "3",
+        "expYear": "2030",
+        "code": "987"
+      }
+    },
+    {
+      "id": "note",
+      "type": 2,
+      "name": "A note",
+      "notes": "secret note",
+      "secureNote": {
+        "type": 0
+      }
+    }
+  ]
+}

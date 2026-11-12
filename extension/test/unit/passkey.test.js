@@ -39,3 +39,20 @@ test('rp ids', () => {
   assert.ok(!rpIdAllowed('co.uk', 'https://shop.co.uk'));
   assert.ok(!rpIdAllowed('ample.com', 'https://example.com'));
 });
+
+test('shared vector', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { unb64u } = await import('../../src/lib/passkey.js');
+  const v = JSON.parse(readFileSync(new URL('../../../testdata/passkey.json', import.meta.url)));
+  const a = await assertPasskey({ passkey: v.passkey, origin: v.origin, challenge: v.challenge });
+  assert.equal(a.clientDataJSON, v.client_data_json);
+  assert.equal(a.authenticatorData, v.authenticator_data);
+  const key = await crypto.subtle.importKey('spki', unb64u(v.public_key), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+  // DER → r||s for WebCrypto.
+  const der = unb64u(a.signature);
+  const rLen = der[3], r = der.slice(4, 4 + rLen), s = der.slice(6 + rLen);
+  const fix = (x) => (x.length > 32 ? x.slice(-32) : Uint8Array.from([...new Uint8Array(32 - x.length), ...x]));
+  const raw = Uint8Array.from([...fix(r), ...fix(s)]);
+  const signed = Uint8Array.from([...unb64u(a.authenticatorData), ...new Uint8Array(await crypto.subtle.digest('SHA-256', unb64u(a.clientDataJSON)))]);
+  assert.ok(await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, raw, signed));
+});

@@ -82,6 +82,10 @@ class AutofillActivity : FragmentActivity() {
             username = parcel(EXTRA_USERNAME), password = parcel(EXTRA_PASSWORD), otp = parcel(EXTRA_OTP),
             usernameValue = intent.getStringExtra(EXTRA_USERNAME_VALUE).orEmpty(),
             passwordValue = intent.getStringExtra(EXTRA_PASSWORD_VALUE).orEmpty(),
+            card = parcels(EXTRA_CARD_IDS).zip(intent.getStringArrayListExtra(EXTRA_CARD_FIELDS).orEmpty())
+                .associate { (id, f) -> CardField.valueOf(f) to id },
+            newPasswords = parcels(EXTRA_NEW_PASSWORDS),
+            newPasswordValue = intent.getStringExtra(EXTRA_NEW_PASSWORD_VALUE).orEmpty(),
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) inline = parcel(EXTRA_INLINE)
         setContent { StoriiTheme { Content() } }
@@ -90,6 +94,10 @@ class AutofillActivity : FragmentActivity() {
     private inline fun <reified T : android.os.Parcelable> parcel(key: String): T? =
         if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(key, T::class.java)
         else @Suppress("DEPRECATION") intent.getParcelableExtra(key)
+
+    private fun parcels(key: String): List<AutofillId> =
+        if (Build.VERSION.SDK_INT >= 33) intent.getParcelableArrayListExtra(key, AutofillId::class.java).orEmpty()
+        else @Suppress("DEPRECATION") intent.getParcelableArrayListExtra<AutofillId>(key).orEmpty()
 
     private val target: String
         get() = screen.webDomain ?: StoriiAutofillService.appLabel(this, screen.packageName) ?: screen.packageName
@@ -111,7 +119,7 @@ class AutofillActivity : FragmentActivity() {
                 if (mode == MODE_UNLOCK) {
                     val r = StoriiAutofillService.respond(this, screen, inline)
                     // Nothing stored for this app or site yet: go straight to the search.
-                    if (!screen.hasCard && vault.forTarget(screen.webDomain, StoriiAutofillService.appPackage(screen)).isEmpty()) picking = true
+                    if (!screen.hasCard && screen.newPasswords.isEmpty() && vault.forTarget(screen.webDomain, StoriiAutofillService.appPackage(screen)).isEmpty()) picking = true
                     else finishWith(r)
                 }
             }) { OutlinedButton(onClick = { finishWith(null) }, modifier = Modifier.fillMaxWidth()) { Text("Cancel") } } }
@@ -188,7 +196,8 @@ class AutofillActivity : FragmentActivity() {
                 scope.launch {
                     try {
                         vault.saveLogin(screen.webDomain, StoriiAutofillService.appPackage(screen),
-                            StoriiAutofillService.appLabel(this@AutofillActivity, screen.packageName), screen.usernameValue, screen.passwordValue)
+                            StoriiAutofillService.appLabel(this@AutofillActivity, screen.packageName), screen.usernameValue, screen.savedPassword,
+                            changed = screen.newPasswordValue.isNotEmpty(), current = screen.passwordValue)
                         finish()
                     } catch (e: Exception) {
                         error = e.message
@@ -228,6 +237,10 @@ class AutofillActivity : FragmentActivity() {
         private const val EXTRA_USERNAME_VALUE = "usernameValue"
         private const val EXTRA_PASSWORD_VALUE = "passwordValue"
         private const val EXTRA_INLINE = "inline"
+        private const val EXTRA_CARD_IDS = "cardIds"
+        private const val EXTRA_CARD_FIELDS = "cardFields"
+        private const val EXTRA_NEW_PASSWORDS = "newPasswords"
+        private const val EXTRA_NEW_PASSWORD_VALUE = "newPasswordValue"
         private var requestCode = 1
 
         fun sender(ctx: Context, mode: String, screen: ParsedScreen, inline: InlineSuggestionsRequest?): IntentSender {
@@ -238,8 +251,12 @@ class AutofillActivity : FragmentActivity() {
                 .putExtra(EXTRA_USERNAME, screen.username as AutofillId?)
                 .putExtra(EXTRA_PASSWORD, screen.password as AutofillId?)
                 .putExtra(EXTRA_OTP, screen.otp as AutofillId?)
+                .putParcelableArrayListExtra(EXTRA_CARD_IDS, ArrayList(screen.card.values))
+                .putStringArrayListExtra(EXTRA_CARD_FIELDS, ArrayList(screen.card.keys.map { it.name }))
+                .putParcelableArrayListExtra(EXTRA_NEW_PASSWORDS, ArrayList(screen.newPasswords))
             if (mode == MODE_SAVE) {
                 i.putExtra(EXTRA_USERNAME_VALUE, screen.usernameValue).putExtra(EXTRA_PASSWORD_VALUE, screen.passwordValue)
+                    .putExtra(EXTRA_NEW_PASSWORD_VALUE, screen.newPasswordValue)
             }
             if (inline != null) i.putExtra(EXTRA_INLINE, inline)
             // Each request needs its own PendingIntent, or Android reuses the extras of an older one.

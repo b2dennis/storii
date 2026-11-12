@@ -59,6 +59,10 @@ test('Firefox: register in the popup, autofill, save prompt, lock', { timeout: 1
   if (skip) return t.skip(skip);
   const popup = await browser.newPage();
   // The popup re-renders after saves and syncs: retry a click that hit an element that was just replaced.
+  const type = async (sel, text) => {
+    await popup.waitForSelector(sel);
+    return popup.type(sel, text);
+  };
   const click = async (sel) => {
     for (let i = 0; ; i++) {
       try {
@@ -73,21 +77,21 @@ test('Firefox: register in the popup, autofill, save prompt, lock', { timeout: 1
   await popup.goto(`moz-extension://${UUID}/popup/popup.html`, { timeout: 5000 }).catch(() => {});
   await popup.waitForSelector('#switch');
   await click('#switch');
-  for (const [sel, v] of [['#server', SERVER], ['#user', USER], ['#pw', MASTER], ['#pw2', MASTER]]) await popup.type(sel, v);
+  for (const [sel, v] of [['#server', SERVER], ['#user', USER], ['#pw', MASTER], ['#pw2', MASTER]]) await type(sel, v);
   await click('#go');
   await popup.waitForSelector('#q', { timeout: 60000 });
 
   await click('#ctxs');
   await click('#add');
-  await popup.type('#name', 'Example');
-  await popup.type('#urls', siteURL);
+  await type('#name', 'Example');
+  await type('#urls', siteURL);
   await click('#save');
   await new Promise((r) => setTimeout(r, 400)); // saving re-renders the list; don't click the old #back
   await click('#back');
   await click('#add');
-  await popup.type('#name', 'Example login');
-  await popup.type('[data-f=username]', 'me@example.com');
-  await popup.type('[data-f=password]', 'hunter2-example');
+  await type('#name', 'Example login');
+  await type('[data-f=username]', 'me@example.com');
+  await type('[data-f=password]', 'hunter2-example');
   await popup.evaluate(() => {
     const s = document.querySelector('#ctxpick');
     s.value = [...s.options].find((o) => o.text === 'Example').value;

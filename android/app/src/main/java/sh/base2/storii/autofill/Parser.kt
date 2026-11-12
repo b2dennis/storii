@@ -15,9 +15,14 @@ data class ParsedScreen(
     val usernameValue: String = "",
     val passwordValue: String = "",
     val card: Map<CardField, AutofillId> = emptyMap(),
+    /** "New password" and "repeat password" fields (signup, reset, change password). */
+    val newPasswords: List<AutofillId> = emptyList(),
+    val newPasswordValue: String = "",
 ) {
-    val ids get() = listOfNotNull(username, password, otp) + card.values
+    val ids get() = (listOfNotNull(username, password, otp) + newPasswords + card.values).distinct()
     val hasCard get() = CardField.NUMBER in card
+    /** What a submitted form should save: the new password where there is one. */
+    val savedPassword get() = newPasswordValue.ifEmpty { passwordValue }
     val isEmpty get() = ids.isEmpty()
 }
 
@@ -53,10 +58,13 @@ object Parser {
         }
         for (i in 0 until structure.windowNodeCount) walk(structure.getWindowNodeAt(i).rootViewNode)
 
-        val password = nodes.firstOrNull { it.second == Kind.PASSWORD }
+        val passwords = nodes.filter { it.second == Kind.PASSWORD }
+        val fresh = NewPassword.pick(passwords.map { NewPassword.Mark.of(hints(it.first), autocomplete(it.first)) })
+            .map { passwords[it] }
+        val password = passwords.firstOrNull { it !in fresh }
         val otp = nodes.firstOrNull { it.second == Kind.OTP }
         val username = nodes.firstOrNull { it.second == Kind.USERNAME }
-            ?: password?.let { pw -> nodes.takeWhile { it !== pw }.lastOrNull { it.second == Kind.TEXT } }
+            ?: (password ?: fresh.firstOrNull())?.let { pw -> nodes.takeWhile { it !== pw }.lastOrNull { it.second == Kind.TEXT } }
             ?: nodes.singleOrNull()?.takeIf { it.second == Kind.TEXT && USER_WORDS.containsMatchIn(describe(it.first)) }
         return ParsedScreen(
             packageName = structure.activityComponent?.packageName.orEmpty(),
@@ -64,12 +72,19 @@ object Parser {
             username = username?.first?.autofillId,
             password = password?.first?.autofillId,
             otp = otp?.first?.autofillId,
-            usernameValue = username?.first?.autofillValue?.takeIf { it.isText }?.textValue?.toString().orEmpty(),
-            passwordValue = password?.first?.autofillValue?.takeIf { it.isText }?.textValue?.toString().orEmpty(),
+            usernameValue = username?.first?.let(::value).orEmpty(),
+            passwordValue = password?.first?.let(::value).orEmpty(),
+            newPasswords = fresh.mapNotNull { it.first.autofillId },
+            newPasswordValue = fresh.firstOrNull()?.first?.let(::value).orEmpty(),
             // A lone "security code" without a card number is a 2FA field, not a card.
             card = if (CardField.NUMBER in card) card else emptyMap(),
         ).let { s -> if (s.hasCard || CardField.CVC !in card) s else s.copy(otp = s.otp ?: card[CardField.CVC]) }
     }
+
+    private fun value(n: AssistStructure.ViewNode) = n.autofillValue?.takeIf { it.isText }?.textValue?.toString()
+    private fun hints(n: AssistStructure.ViewNode) = n.autofillHints.orEmpty().toList()
+    private fun autocomplete(n: AssistStructure.ViewNode) =
+        n.htmlInfo?.attributes?.firstOrNull { it.first == "autocomplete" }?.second?.lowercase().orEmpty()
 
     private fun cardField(n: AssistStructure.ViewNode): CardField? {
         val html = n.htmlInfo
@@ -114,5 +129,34 @@ object Parser {
         if (USER_WORDS.containsMatchIn(text) && !PASS_WORDS.containsMatchIn(text)) return Kind.USERNAME
         if (cls == InputType.TYPE_CLASS_TEXT || htmlType == "text" || htmlType == "tel") return Kind.TEXT
         return null
+    }
+}
+
+/**
+ * Which password fields want a new password. Marked ones (hint "newPassword", autocomplete="new-password") decide when
+ * present. Otherwise: one field is a login; two are "password + repeat" (signup, reset); three are "current, new,
+ * repeat". A field marked as the current password never is.
+ */
+object NewPassword {
+    enum class Mark { NEW, CURRENT, NONE;
+        companion object {
+            fun of(hints: List<String>, autocomplete: String): Mark = when {
+                hints.any { it.equals("newPassword", true) } || "new-password" in autocomplete -> NEW
+                "current-password" in autocomplete -> CURRENT
+                else -> NONE
+            }
+        }
+    }
+
+    fun pick(fields: List<Mark>): List<Int> {
+        val marked = fields.indices.filter { fields[it] == Mark.NEW }
+        if (marked.isNotEmpty()) return marked
+        val open = fields.indices.filter { fields[it] == Mark.NONE }
+        return when {
+            fields.size == 2 && open.size == 2 -> open
+            fields.size == 3 -> open.takeLast(2).takeIf { it.size == 2 }.orEmpty()
+            fields.size == 2 && open.size == 1 && fields.count { it == Mark.CURRENT } == 1 -> open
+            else -> emptyList()
+        }
     }
 }

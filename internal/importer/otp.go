@@ -31,6 +31,10 @@ const (
 func Detect(data []byte) string {
 	s := strings.TrimSpace(string(bytes.TrimPrefix(data, []byte("\uFEFF"))))
 	switch {
+	case isBitwarden(data):
+		return KindBitwarden
+	case isOnePassword(data):
+		return KindOnePassword
 	case strings.Contains(s, "encrypted_seed"):
 		return KindAuthy
 	case strings.Contains(s, "decrypted_seed"), strings.Contains(strings.ToLower(s), "otpauth://totp/"):

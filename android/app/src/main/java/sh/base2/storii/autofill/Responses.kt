@@ -101,6 +101,19 @@ class Responses(private val ctx: Context, private val screen: ParsedScreen, priv
         }
     }
 
+    /**
+     * On signup, reset and change-password forms: a freshly generated password for the new and repeat fields. It's
+     * saved like any typed password once the form is submitted (see [saveInfo]).
+     */
+    @Suppress("DEPRECATION")
+    fun suggestion(): Dataset? {
+        if (screen.newPasswords.isEmpty()) return null
+        val pw = sh.base2.storii.core.generatePassword()
+        return dataset("Use a strong password", pw.take(4) + "•".repeat(8) + " · saved when you submit") {
+            for (id in screen.newPasswords) setValue(id, AutofillValue.forText(pw))
+        }
+    }
+
     /** A dataset that runs an activity first (unlock, or search the whole vault). */
     @Suppress("DEPRECATION")
     fun authDataset(title: String, sub: String?, sender: IntentSender): Dataset = dataset(title, sub) {
@@ -109,10 +122,12 @@ class Responses(private val ctx: Context, private val screen: ParsedScreen, priv
     }
 
     fun saveInfo(): SaveInfo? {
-        val pw = screen.password ?: return null
+        // Where a new password goes in, that's the one worth saving.
+        val pw = screen.newPasswords.firstOrNull() ?: screen.password ?: return null
         val type = if (screen.username != null) SaveInfo.SAVE_DATA_TYPE_PASSWORD or SaveInfo.SAVE_DATA_TYPE_USERNAME else SaveInfo.SAVE_DATA_TYPE_PASSWORD
         return SaveInfo.Builder(type, arrayOf(pw)).apply {
-            screen.username?.let { setOptionalIds(arrayOf(it)) }
+            val optional = listOfNotNull(screen.username, screen.password).filter { it != pw }
+            if (optional.isNotEmpty()) setOptionalIds(optional.toTypedArray())
         }.build()
     }
 

@@ -248,6 +248,12 @@ enum Identities {
                 }
             }
         }
+        for e in vault.secrets() where e.item.type == Item.passkey {
+            guard let cred = Passkey.unb64u(e.item.field("credential_id")) else { continue }
+            out.append(ASPasskeyCredentialIdentity(relyingPartyIdentifier: e.item.field("rp_id"), userName: e.item.field("user_name"),
+                                                   credentialID: cred, userHandle: Passkey.unb64u(e.item.field("user_handle")) ?? Data(),
+                                                   recordIdentifier: e.id))
+        }
         try? await store.replaceCredentialIdentities(out)
     }
 

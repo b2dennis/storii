@@ -35,8 +35,9 @@ CLI covers the terminal.
 
 - **Offline**: every client keeps an encrypted copy and unlocks without the server. Changes sync when online.
 - **Moving from v1**: `storii migrate` brings over your old passwords ([docs/MIGRATING.md](docs/MIGRATING.md)).
-- **Importing**: logins from Google Password Manager, Chrome, Firefox, Bitwarden or 1Password, and 2FA codes from
-  Authy, on the phone or with the CLI (see below).
+- **Importing**: logins from Google Password Manager, Chrome, Firefox, Bitwarden or 1Password, 2FA codes from
+  Authy, everything (logins, 2FA codes, cards, passkeys) from a Bitwarden JSON export, and logins, 2FA codes and
+  cards from a 1Password .1pux export, on the phone or with the CLI (see below).
 
 ## Layout
 
@@ -99,6 +100,13 @@ storii help
   and choose it in storii › Settings › Import passwords). storii shows what it will add, imports, and deletes the file.
 - On a computer: export from passwords.google.com (Settings › Export passwords), then
   `storii import Passwords.csv --dry-run`, `storii import Passwords.csv`, and delete the file.
+
+**Everything from Bitwarden**, passkeys and cards included: in Bitwarden, Tools › Export vault, file format
+`.json` (not "encrypted"). Import it on Android or with `storii import bitwarden_export.json`, then delete the file.
+
+**Everything from 1Password** (logins, 2FA codes, cards; 1Password doesn't export passkeys, and archived items are
+skipped): in the 1Password app, File › Export › your account, format 1PUX. Import it on Android or with
+`storii import 1PasswordExport.1pux`, then delete the file.
 
 **2FA codes from Authy**: Authy has no export, but under the GDPR Twilio has to give you your data. Email
 privacy@twilio.com (or use the privacy request form on twilio.com) asking for a copy of your Authy authenticator

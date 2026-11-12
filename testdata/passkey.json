@@ -1,0 +1,16 @@
+{
+  "comment": "A fixed passkey and the sign-in storii must produce for it (the signature varies; check it with public_key, SPKI). Shared by the extension (src/lib/passkey.js) and Android tests.",
+  "passkey": {
+    "credential_id": "c3RvcmlpLXRlc3QtY3JlZA",
+    "rp_id": "example.com",
+    "user_handle": "BwcH",
+    "user_name": "me@example.com",
+    "user_display_name": "Me",
+    "private_key": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgvRUzLmT0euVDz7Vhzschy7nYFtMaTpREe27n6c5lasuhRANCAARAMIEkdk5zNiKX5FWpV6NyuPRBAfvOvpzqfHymwVE0w9eDY06qLWMStifTA6qS42vzunIHFN-j0VZfuzhvMkPR"
+  },
+  "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEQDCBJHZOczYil-RVqVejcrj0QQH7zr6c6nx8psFRNMPXg2NOqi1jErYn0wOqkuNr87pyBxTfo9FWX7s4bzJD0Q",
+  "origin": "https://login.example.com",
+  "challenge": "dGVzdC1jaGFsbGVuZ2UtMTIzNDU2Nzg",
+  "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZEdWemRDMWphR0ZzYkdWdVoyVXRNVEl6TkRVMk56ZyIsIm9yaWdpbiI6Imh0dHBzOi8vbG9naW4uZXhhbXBsZS5jb20iLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+  "authenticator_data": "o3mm9u6vuaVeN4wRgDTidR5oL6ufLTCrE9ISVYbOGUcdAAAAAA"
+}

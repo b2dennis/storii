@@ -282,6 +282,30 @@
     document.documentElement.append(host);
   }
 
+  // Unlock right here: the picker turns into an extension frame with the master password field (see unlock/). The
+  // page can't see into it; it only hears "unlocked" or "close", and then the picker asks the background again.
+  function unlockHere(anchor) {
+    const box = shadow?.querySelector('.box');
+    if (!box) return;
+    box.replaceChildren();
+    box.style.padding = '0';
+    box.style.overflow = 'hidden';
+    const frame = document.createElement('iframe');
+    frame.src = chrome.runtime.getURL('unlock/unlock.html');
+    frame.allow = 'publickey-credentials-get *';
+    frame.style.cssText = 'display:block;border:0;width:300px;height:132px;color-scheme:normal';
+    box.append(frame);
+    const onMessage = (e) => {
+      if (e.source !== frame.contentWindow || !e.data?.storii) return;
+      removeEventListener('message', onMessage);
+      closePicker();
+      anchor.focus();
+      if (e.data.storii === 'unlocked') offer(anchor);
+    };
+    addEventListener('message', onMessage);
+    setTimeout(() => frame.focus(), 0);
+  }
+
   async function choose(anchor, id) {
     closePicker();
     try {
@@ -303,7 +327,7 @@
     }
     if (document.activeElement !== anchor || typedAt > asked) return;
     if (res.locked) {
-      picker(anchor, [{ icon: '🔒', title: 'Unlock storii', sub: 'to fill your card', action: () => { closePicker(); send({ type: 'openUnlock' }); } }]);
+      picker(anchor, [{ icon: '🔒', title: 'Unlock storii', sub: 'to fill your card', action: () => unlockHere(anchor) }]);
       return;
     }
     const rows = res.items.map((c) => ({
@@ -333,7 +357,7 @@
       suggest.push({ icon: '✦', title: 'Use a strong password', sub: pw, action: () => { closePicker(); fillNewPassword(anchor, pw); } });
     }
     if (res.locked) {
-      picker(anchor, [...suggest, { icon: '🔒', title: 'Unlock storii', sub: 'to fill this form', action: () => { closePicker(); send({ type: 'openUnlock' }); } }]);
+      picker(anchor, [...suggest, { icon: '🔒', title: 'Unlock storii', sub: 'to fill this form', action: () => unlockHere(anchor) }]);
       return;
     }
     const want = kind === 'otp' ? 'totp' : 'password';
@@ -348,7 +372,7 @@
 
   document.addEventListener('focusin', (e) => {
     const el = e.composedPath?.()[0] || e.target;
-    if (el === anchorEl) return;
+    if (el === anchorEl || (host && el === host)) return;
     closePicker();
     if (el instanceof HTMLInputElement) offer(el);
   }, true);
@@ -371,7 +395,20 @@
 
   // Remember submitted logins so the background can offer to save them.
 
+  // A card typed into a checkout form: the background offers to save it if it's new.
+  function captureCard(scope) {
+    const card = {};
+    for (const el of scope.querySelectorAll('input, select')) {
+      const r = cardRole(el);
+      if (r && el.value && !(r in card)) card[r] = el.value;
+    }
+    if (!card.number) return;
+    const expiry = card.exp || (card.month && card.year ? `${card.month}/${String(card.year).slice(-2)}` : '');
+    send({ type: 'cardSubmitted', card: { number: card.number, cardholder: card.name || '', expiry, cvc: card.cvc || '' } }).catch(() => {});
+  }
+
   function captureSubmit(scope) {
+    captureCard(scope);
     // In change-password forms the new password is the one to save, not the current one.
     const filled = passwordFields(scope).filter((p) => p.value);
     const pw = filled.find(isNewPassword) || filled[0];
@@ -385,7 +422,7 @@
   document.addEventListener('submit', (e) => captureSubmit(e.target), true);
   document.addEventListener('click', (e) => {
     const b = e.target.closest?.('button, input[type=submit]');
-    if (b && (b.type === 'submit' || /log ?in|sign ?in|continue|next/i.test(b.textContent || b.value || ''))) {
+    if (b && (b.type === 'submit' || /log ?in|sign ?in|continue|next|pay|buy|order|checkout|bezahlen|kaufen|bestellen|payer|commander/i.test(b.textContent || b.value || ''))) {
       captureSubmit(b.form || document);
     }
   }, true);
@@ -416,8 +453,13 @@
       .save { background: #5856d6; color: #fff; } .no { background: transparent; color: inherit; }
     </style><div class="bar" role="dialog"><b></b><div class="s"></div>
     <div class="row"><button class="no">Not now</button><button class="save">Save</button></div></div>`;
-    sh.querySelector('b').textContent = p.update ? `Update the password for ${p.host}?` : `Save this login for ${p.host}?`;
-    sh.querySelector('.s').textContent = p.username ? `as ${p.username}, in storii` : 'in storii';
+    if (p.card) {
+      sh.querySelector('b').textContent = 'Save this card in storii?';
+      sh.querySelector('.s').textContent = `${p.card.brand ? p.card.brand[0].toUpperCase() + p.card.brand.slice(1) + ' ' : ''}•••• ${p.card.last4}`;
+    } else {
+      sh.querySelector('b').textContent = p.update ? `Update the password for ${p.host}?` : `Save this login for ${p.host}?`;
+      sh.querySelector('.s').textContent = p.username ? `as ${p.username}, in storii` : 'in storii';
+    }
     sh.querySelector('.save').onclick = () => send({ type: 'confirmSave', save: true }).finally(() => bar.remove());
     sh.querySelector('.no').onclick = () => send({ type: 'confirmSave', save: false }).finally(() => bar.remove());
     document.documentElement.append(bar);

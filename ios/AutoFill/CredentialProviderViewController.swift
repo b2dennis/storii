@@ -19,8 +19,15 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
 
     private func show(_ request: AutoFillRequest) {
         model.vault.reload()
-        let root = AutoFillView(request: request, finish: { [weak self] in self?.finish($0) })
-            .environment(model)
+        host(AutoFillView(request: request, finish: { [weak self] in self?.finish($0) }).environment(model))
+    }
+
+    private func show(_ request: PasskeyRequest) {
+        model.vault.reload()
+        host(PasskeyView(request: request, finish: { [weak self] in self?.finish($0) }).environment(model))
+    }
+
+    private func host(_ root: some View) {
         #if os(iOS)
         let host = UIHostingController(rootView: root)
         addChild(host)
@@ -54,7 +61,26 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         extensionContext.cancelRequest(withError: NSError(domain: ASExtensionErrorDomain, code: ASExtensionError.userInteractionRequired.rawValue))
     }
 
+    // Passkeys (iOS 17 / macOS 14 and later).
+
+    override func prepareInterface(forPasskeyRegistration registrationRequest: any ASCredentialRequest) {
+        guard let r = registrationRequest as? ASPasskeyCredentialRequest, let id = r.credentialIdentity as? ASPasskeyCredentialIdentity,
+              r.supportedAlgorithms.isEmpty || r.supportedAlgorithms.contains(.ES256) else {
+            return finish(.cancel)
+        }
+        show(.register(rpId: id.relyingPartyIdentifier, userName: id.userName, userHandle: id.userHandle, clientDataHash: r.clientDataHash))
+    }
+
+    override func prepareCredentialList(for serviceIdentifiers: [ASCredentialServiceIdentifier],
+                                        requestParameters: ASPasskeyCredentialRequestParameters) {
+        show(.assert(rpId: requestParameters.relyingPartyIdentifier, clientDataHash: requestParameters.clientDataHash,
+                     allowed: requestParameters.allowedCredentials, recordID: nil))
+    }
+
     override func prepareInterfaceToProvideCredential(for credentialRequest: any ASCredentialRequest) {
+        if let r = credentialRequest as? ASPasskeyCredentialRequest, let id = r.credentialIdentity as? ASPasskeyCredentialIdentity {
+            return show(.assert(rpId: id.relyingPartyIdentifier, clientDataHash: r.clientDataHash, allowed: [], recordID: id.recordIdentifier))
+        }
         let identity = credentialRequest.credentialIdentity
         guard let id = identity.recordIdentifier else {
             show(.passwords(hosts: [Match.host(identity.serviceIdentifier.identifier)]))
@@ -70,6 +96,8 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     enum Result {
         case password(user: String, password: String)
         case code(String)
+        case passkeyRegistration(ASPasskeyRegistrationCredential)
+        case passkeyAssertion(ASPasskeyAssertionCredential)
         case cancel
     }
 
@@ -79,6 +107,10 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
             extensionContext.completeRequest(withSelectedCredential: ASPasswordCredential(user: user, password: password), completionHandler: nil)
         case .code(let code):
             extensionContext.completeOneTimeCodeRequest(using: ASOneTimeCodeCredential(code: code))
+        case .passkeyRegistration(let c):
+            extensionContext.completeRegistrationRequest(using: c)
+        case .passkeyAssertion(let c):
+            extensionContext.completeAssertionRequest(using: c)
         case .cancel:
             extensionContext.cancelRequest(withError: NSError(domain: ASExtensionErrorDomain, code: ASExtensionError.userCanceled.rawValue))
         }

@@ -35,7 +35,7 @@ class StoriiAutofillService : AutofillService() {
 
     override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
         val screen = Parser.parse(request.fillContexts.last().structure)
-        if (screen.passwordValue.isEmpty() || screen.packageName == packageName || !vault.isSetUp) {
+        if (screen.savedPassword.isEmpty() || screen.packageName == packageName || !vault.isSetUp) {
             callback.onSuccess()
             return
         }
@@ -43,7 +43,8 @@ class StoriiAutofillService : AutofillService() {
             val label = appLabel(this, screen.packageName)
             val vault = vault
             (application as StoriiApp).scope.launch {
-                runCatching { vault.saveLogin(screen.webDomain, appPackage(screen), label, screen.usernameValue, screen.passwordValue) }
+                runCatching { vault.saveLogin(screen.webDomain, appPackage(screen), label, screen.usernameValue, screen.savedPassword,
+                    changed = screen.newPasswordValue.isNotEmpty(), current = screen.passwordValue) }
                     .onFailure { Log.w("storii", "save failed", it) }
             }
             callback.onSuccess()
@@ -68,7 +69,7 @@ class StoriiAutofillService : AutofillService() {
                 // Cards belong to no site: on a card form, all of them are offered.
                 val cards = if (screen.hasCard) ctx.vault.secrets().filter { it.item.type == sh.base2.storii.core.Item.CARD } else emptyList()
                 val matches = (cards + ctx.vault.forTarget(screen.webDomain, appPackage(screen))).mapNotNull { r.datasetFor(it) }
-                r.response(matches + r.authDataset("Search storii…", screen.webDomain ?: appLabel(ctx, screen.packageName),
+                r.response(matches + listOfNotNull(r.suggestion()) + r.authDataset("Search storii…", screen.webDomain ?: appLabel(ctx, screen.packageName),
                     AutofillActivity.sender(ctx, AutofillActivity.MODE_PICK, screen, inline)))
             }
     }

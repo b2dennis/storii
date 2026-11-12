@@ -58,7 +58,9 @@ Contexts (apps and websites; a secret can belong to several)
 Importing from other password managers
   storii import FILE [--dry-run]    logins from a CSV export of Google Password Manager (passwords.google.com,
                                     Chrome, the Android app), Firefox, Bitwarden or 1Password; 2FA codes from an
-                                    Authy export (asks for the Authy backup password) or a list of otpauth:// links.
+                                    Authy export (asks for the Authy backup password) or a list of otpauth:// links;
+                                    logins, 2FA codes, cards and passkeys from a Bitwarden JSON export;
+                                    logins, 2FA codes and cards from a 1Password .1pux export.
                                     Safe to run twice.
 
 Moving from storii v1

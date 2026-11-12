@@ -38,13 +38,14 @@ const RESET_PAGE = `<!doctype html><title>Reset</title><form action="/welcome" m
 
 // A checkout: card fields with autocomplete hints, expiry as two selects, and a third-party iframe (another host)
 // with a card number field that must stay empty.
-const CHECKOUT_PAGE = `<!doctype html><title>Checkout</title><form style="margin:40px">
+const CHECKOUT_PAGE = `<!doctype html><title>Checkout</title><form action="/welcome" method="post" style="margin:40px">
   <input id="num" autocomplete="cc-number" placeholder="Card number"><br>
   <input id="holder" name="cardholder" placeholder="Name on card"><br>
   <select id="mm" name="exp-month"><option value="">MM</option>${Array.from({ length: 12 }, (_, i) => `<option>${String(i + 1).padStart(2, '0')}</option>`).join('')}</select>
   <select id="yy" name="exp-year"><option value="">YYYY</option><option>2028</option><option>2029</option><option>2030</option></select>
   <input id="cvc" name="cvc" placeholder="CVC" maxlength="4"><br>
   <iframe src="http://localhost:PORT/evil" style="width:300px;height:60px"></iframe>
+  <button type="submit">Pay now</button>
 </form>`;
 
 let up = false;
@@ -227,6 +228,23 @@ test('register, add secrets in the popup, autofill, save prompt', { timeout: 120
   const evil = page.frames().find((f) => f.url().includes('/evil'));
   assert.equal(await evil.inputValue('#n'), '', 'a third-party iframe gets no card');
 
+  // A new card typed at checkout is offered for saving after paying.
+  await page.goto(`${siteURL}/checkout`);
+  await page.fill('#num', '5555 5555 5555 4444');
+  await page.keyboard.press('Escape');
+  await page.fill('#holder', 'New Card');
+  await page.selectOption('#mm', '03');
+  await page.selectOption('#yy', '2030');
+  await page.fill('#cvc', '987');
+  await Promise.all([page.waitForURL('**/welcome'), page.click('button[type=submit]')]);
+  await page.waitForTimeout(800);
+  await page.mouse.click(page.viewportSize().width - 12 - 40, 12 + 70);
+  await page.waitForTimeout(800);
+  const withCard = await popup.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'items' }, (x) => r(x.result))));
+  const newCard = withCard.find((i) => i.type === 'card' && i.fields?.number === '5555555555554444');
+  assert.ok(newCard, 'the typed card was saved');
+  assert.deepEqual([newCard.name, newCard.fields.expiry, newCard.fields.cvc, newCard.fields.cardholder], ['Mastercard 4444', '03/30', '987', 'New Card']);
+
   // Passkeys: storii answers navigator.credentials after the user approves in its window; an independent relying
   // party (SimpleWebAuthn) verifies the registration and the sign-in.
   const rpOrigin = `http://localhost:${site.address().port}`;
@@ -281,8 +299,29 @@ test('register, add secrets in the popup, autofill, save prompt', { timeout: 120
   // Locking hides everything from pages.
   await popup.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'lock' }, r)));
   await page.goto(siteURL);
-  await pickFirst(page, 'input[name=email]'); // shows "Unlock storii" instead
+  await pickFirst(page, 'input[name=email]'); // "Unlock storii": the picker turns into the unlock frame
   assert.equal(await page.inputValue('input[name=pass]'), '');
+  // Unlocking right on the page, in storii's own frame, then picking the login.
+  let unlockFrame;
+  for (let i = 0; i < 50 && !unlockFrame; i++) {
+    unlockFrame = page.frames().find((f) => f.url().includes('/unlock/unlock.html'));
+    if (!unlockFrame) await page.waitForTimeout(100);
+  }
+  assert.ok(unlockFrame, 'unlock frame shown in the picker');
+  // The page sees neither the field nor what's typed into it.
+  const seen = await page.evaluate(() => { const k = []; addEventListener('keydown', (e) => k.push(e.key), true); window.__keys = k; return document.querySelectorAll('input[type=password]').length; });
+  await unlockFrame.fill('#pw', 'wrong-password');
+  await unlockFrame.press('#pw', 'Enter');
+  await unlockFrame.waitForSelector('#err:not(:empty)');
+  await unlockFrame.fill('#pw', MASTER);
+  await unlockFrame.press('#pw', 'Enter');
+  await page.waitForTimeout(800); // the picker comes back with the matches
+  assert.deepEqual(await page.evaluate(() => window.__keys), []);
+  assert.equal(seen, 1);
+  const emailBox = await page.locator('input[name=email]').boundingBox();
+  await page.mouse.click(emailBox.x + 60, emailBox.y + emailBox.height + 22);
+  await page.waitForTimeout(300);
+  assert.match(await page.inputValue('input[name=pass]'), /^(hunter2-example|redirected-pass)$/); // this site's logins
 
   // The Go CLI reads what the extension wrote.
   const cli = process.env.STORII_E2E_CLI;
