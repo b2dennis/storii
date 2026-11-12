@@ -14,8 +14,10 @@ data class ParsedScreen(
     val otp: AutofillId?,
     val usernameValue: String = "",
     val passwordValue: String = "",
+    val card: Map<CardField, AutofillId> = emptyMap(),
 ) {
-    val ids get() = listOfNotNull(username, password, otp)
+    val ids get() = listOfNotNull(username, password, otp) + card.values
+    val hasCard get() = CardField.NUMBER in card
     val isEmpty get() = ids.isEmpty()
 }
 
@@ -23,17 +25,29 @@ private val OTP_WORDS = Regex("one.?time|otp|totp|2fa|mfa|two.?factor|verificati
 private val USER_WORDS = Regex("user|login|e-?mail|account|identifier", RegexOption.IGNORE_CASE)
 private val PASS_WORDS = Regex("pass(word|wd)?|pwd|pin", RegexOption.IGNORE_CASE)
 
-private enum class Kind { USERNAME, PASSWORD, OTP, TEXT }
+private enum class Kind { USERNAME, PASSWORD, OTP, TEXT, CARD }
+
+/** Card fields: Android's autofill hints, the web's autocomplete="cc-*", then ids and labels (as the extension). */
+enum class CardField(val hint: String, val autocomplete: String, val words: Regex) {
+    NUMBER(View.AUTOFILL_HINT_CREDIT_CARD_NUMBER, "cc-number", Regex("card.?num|cc.?num|cardnumber|kartennummer|num(é|e)ro.?(de.?)?carte", RegexOption.IGNORE_CASE)),
+    NAME("creditCardHolderName", "cc-name", Regex("card.?holder|name.?on.?card|cc.?name|karteninhaber|titulaire", RegexOption.IGNORE_CASE)),
+    MONTH(View.AUTOFILL_HINT_CREDIT_CARD_EXPIRATION_MONTH, "cc-exp-month", Regex("exp\\w*.?(month|mm\\b)|ablaufmonat", RegexOption.IGNORE_CASE)),
+    YEAR(View.AUTOFILL_HINT_CREDIT_CARD_EXPIRATION_YEAR, "cc-exp-year", Regex("exp\\w*.?(year|yy)|ablaufjahr", RegexOption.IGNORE_CASE)),
+    CVC(View.AUTOFILL_HINT_CREDIT_CARD_SECURITY_CODE, "cc-csc", Regex("cvc|cvv|csc|security.?code|card.?code|sicherheitscode|pr(ü|u)fnummer", RegexOption.IGNORE_CASE)),
+    EXPIRY(View.AUTOFILL_HINT_CREDIT_CARD_EXPIRATION_DATE, "cc-exp", Regex("(?<![a-z])exp(iry|iration|ires)?(\\b|[_-]?date)|expir|mm.?/.?yy|ablaufdatum|g(ü|u)ltig.?bis", RegexOption.IGNORE_CASE)),
+}
 
 /** Walks an AssistStructure (app views or a browser's web page) and classifies the text inputs. */
 object Parser {
     fun parse(structure: AssistStructure): ParsedScreen {
         val nodes = mutableListOf<Pair<AssistStructure.ViewNode, Kind>>()
+        val card = linkedMapOf<CardField, AutofillId>()
         var webDomain: String? = null
         fun walk(n: AssistStructure.ViewNode) {
             if (webDomain == null && !n.webDomain.isNullOrBlank()) webDomain = n.webDomain
             if (n.autofillId != null && n.autofillType == View.AUTOFILL_TYPE_TEXT && n.visibility == View.VISIBLE) {
-                classify(n)?.let { nodes += n to it }
+                val c = cardField(n)
+                if (c != null) card.putIfAbsent(c, n.autofillId!!) else classify(n)?.let { nodes += n to it }
             }
             for (i in 0 until n.childCount) walk(n.getChildAt(i))
         }
@@ -52,7 +66,20 @@ object Parser {
             otp = otp?.first?.autofillId,
             usernameValue = username?.first?.autofillValue?.takeIf { it.isText }?.textValue?.toString().orEmpty(),
             passwordValue = password?.first?.autofillValue?.takeIf { it.isText }?.textValue?.toString().orEmpty(),
-        )
+            // A lone "security code" without a card number is a 2FA field, not a card.
+            card = if (CardField.NUMBER in card) card else emptyMap(),
+        ).let { s -> if (s.hasCard || CardField.CVC !in card) s else s.copy(otp = s.otp ?: card[CardField.CVC]) }
+    }
+
+    private fun cardField(n: AssistStructure.ViewNode): CardField? {
+        val html = n.htmlInfo
+        if (html != null && html.tag.lowercase() != "input") return null
+        val hints = n.autofillHints.orEmpty().toSet()
+        val autocomplete = html?.attributes?.firstOrNull { it.first == "autocomplete" }?.second?.lowercase()?.split(' ')?.last().orEmpty()
+        CardField.entries.firstOrNull { it.hint in hints || it.autocomplete == autocomplete }?.let { return it }
+        if (hints.isNotEmpty() || (autocomplete.isNotEmpty() && autocomplete != "on" && autocomplete != "off")) return null
+        val text = describe(n)
+        return CardField.entries.firstOrNull { it.words.containsMatchIn(text) }
     }
 
     private fun describe(n: AssistStructure.ViewNode): String {

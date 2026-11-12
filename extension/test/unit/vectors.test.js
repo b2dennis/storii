@@ -51,3 +51,14 @@ test('otpauth', () => {
 test('match', () => {
   for (const c of v.match) assert.equal(matchesHost(c.context_url, c.host), c.match, JSON.stringify(c));
 });
+
+test('cards', async () => {
+  const { cardBrand, cardValid, cardMasked, normalizeExpiry } = await import('../../src/lib/card.js');
+  const c = JSON.parse(readFileSync(new URL('../../../testdata/cards.json', import.meta.url)));
+  for (const n of c.numbers) {
+    assert.equal(cardBrand(n.number), n.brand, n.number);
+    assert.equal(cardValid(n.number), n.valid, n.number);
+    assert.equal(cardMasked(n.number), n.masked, n.number);
+  }
+  for (const e of c.expiry) assert.equal(normalizeExpiry(e.input), e.normalized, e.input);
+});

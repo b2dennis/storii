@@ -1,9 +1,11 @@
 // The background worker owns the vault: the encrypted copy in storage.local, and while unlocked the vault key in
 // storage.session (memory only, gone when the browser closes). Content scripts only ever get the secrets of
 // contexts that match the frame they run in.
-import { deriveKeys, newKdf, randomBytes, toB64, fromB64, wrapVaultKey, unwrapVaultKey, encryptItem, decryptItem } from './lib/crypto.js';
+import { deriveKeys, newKdf, randomBytes, toB64, fromB64, wrapVaultKey, unwrapVaultKey, encryptItem, decryptItem, seal, open } from './lib/crypto.js';
 import { contextMatches, host as hostOf } from './lib/match.js';
 import { totpFromFields, totpCode } from './lib/totp.js';
+import { cardBrand, cardDigits } from './lib/card.js';
+import { createPasskey, assertPasskey, rpIdAllowed } from './lib/passkey.js';
 
 const DEFAULT_LOCK_MINUTES = 15;
 
@@ -171,7 +173,46 @@ async function unlock({ password }) {
   sync().catch(() => {});
 }
 
+// Quick unlock: a passkey for this extension (Windows Hello, Touch ID, a phone or a security key) whose WebAuthn PRF
+// output wraps the vault key. The popup runs the ceremony and hands over the 32-byte PRF output; the wrapped key
+// stays in this browser's storage and is useless without the authenticator.
+async function quickKey(prf) {
+  const raw = fromB64(prf);
+  if (raw.length !== 32) throw new Error('bad PRF output');
+  const k = await crypto.subtle.importKey('raw', raw, 'HKDF', false, ['deriveBits']);
+  return new Uint8Array(await crypto.subtle.deriveBits(
+    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(32), info: new TextEncoder().encode('storii:quick-unlock') }, k, 256));
+}
+
+async function quickUnlockSetup({ prf, credentialId, salt }) {
+  const vaultKey = await getVaultKey();
+  if (!vaultKey) throw new Error('locked');
+  const state = await getState();
+  const wrapped = await seal(await quickKey(prf), vaultKey, 'storii:quick-unlock');
+  await chrome.storage.local.set({ quickUnlock: { credentialId, salt, wrapped, account: `${state.username}@${state.server}` } });
+}
+
+async function quickUnlock({ prf }) {
+  const { quickUnlock: q } = await chrome.storage.local.get('quickUnlock');
+  if (!q) throw new Error('quick unlock is off');
+  let vaultKey;
+  try {
+    vaultKey = await open(await quickKey(prf), q.wrapped, 'storii:quick-unlock');
+  } catch {
+    throw new Error('That passkey does not unlock this vault. Unlock with your master password and set it up again.');
+  }
+  // The key must still open this account's vault (e.g. after logging in as someone else).
+  const state = await getState();
+  for (const [id, it] of Object.entries(state?.items || {}).slice(0, 1)) await decryptItem(vaultKey, id, it.data);
+  await chrome.storage.session.set({ vaultKey: toB64(vaultKey) });
+  cache = null;
+  await touch();
+  updateBadge();
+  sync().catch(() => {});
+}
+
 async function logout() {
+  await chrome.storage.local.remove('quickUnlock');
   const state = await getState();
   if (state?.token) await api(state, 'POST', '/api/v2/logout').catch(() => {});
   await lock();
@@ -264,6 +305,9 @@ async function noteSubmission(sender, { username, password }) {
   const all = await items();
   let existingId = null;
   if (all) {
+    const logins = (await secretsForHost(host)).filter((s) => s.type === 'password');
+    // A new password without a username (reset and change-password forms) replaces the site's only login.
+    if (!username && logins.length === 1) existingId = logins[0].id;
     for (const s of await secretsForHost(host)) {
       if (s.type !== 'password') continue;
       if (s.fields?.password === password && (!username || s.fields?.username === username)) return; // known
@@ -273,6 +317,15 @@ async function noteSubmission(sender, { username, password }) {
     }
   }
   await pendingSaves.set(sender.tab.id, { host, username, password, existingId, at: Date.now() });
+}
+
+// The last two labels of a host (three under short second-level domains like co.uk): close enough to a registrable
+// domain for deciding whether a redirect stayed on the same site.
+function siteOf(h) {
+  const l = (h || '').split('.');
+  if (l.length <= 2 || /^[\d.]+$/.test(h)) return h;
+  const n = l.at(-2).length <= 3 && l.at(-1).length === 2 ? 3 : 2;
+  return l.slice(-n).join('.');
 }
 
 async function pendingFor(tabId) {
@@ -318,9 +371,78 @@ async function openUnlock() {
   }
 }
 
+// Passkeys: every request is approved in a small storii window (which also unlocks the vault when needed).
+const passkeyReqs = new Map(); // reqId -> { req, resolve, windowId }
+
+function askPasskey(req) {
+  return new Promise((resolve) => {
+    const reqId = crypto.randomUUID();
+    const entry = { req, resolve, windowId: null };
+    passkeyReqs.set(reqId, entry);
+    chrome.windows.create({ url: chrome.runtime.getURL(`popup/popup.html?window=1&passkey=${reqId}`), type: 'popup', width: 380, height: 560 })
+      .then((w) => (entry.windowId = w.id), () => { passkeyReqs.delete(reqId); resolve({ action: 'cancel' }); });
+  });
+}
+
+chrome.windows.onRemoved.addListener((windowId) => {
+  for (const [id, p] of passkeyReqs) {
+    if (p.windowId !== windowId) continue;
+    passkeyReqs.delete(id);
+    p.resolve({ action: 'cancel' });
+  }
+});
+
+function passkeysFor(all, rpId, ids = []) {
+  return [...all].filter(([, it]) => it.kind === 'secret' && it.type === 'passkey' && it.fields?.rp_id === rpId &&
+    (!ids.length || ids.includes(it.fields.credential_id)));
+}
+
+const NOT_ALLOWED = { error: 'NotAllowedError', message: 'The operation either timed out or was not allowed.' };
+
+async function passkey({ op, data }, sender) {
+  // The origin comes from the browser, never from the page.
+  let origin = sender.origin && sender.origin !== 'null' ? sender.origin : '';
+  try {
+    origin ||= new URL(sender.url).origin;
+  } catch {
+    return { fallback: true };
+  }
+  if (!sender.tab || !data || typeof data.challenge !== 'string' || !rpIdAllowed(data.rpId, origin) || !(await getState())) return { fallback: true };
+  let crossOrigin = false;
+  try {
+    crossOrigin = sender.frameId !== 0 && new URL(sender.tab.url).origin !== origin;
+  } catch {}
+  const known = await items();
+  if (known && op === 'get' && !passkeysFor(known, data.rpId, data.allow).length) return { fallback: true };
+  if (known && op === 'create' && data.exclude?.length && passkeysFor(known, data.rpId, data.exclude).length) {
+    return { error: 'InvalidStateError', message: 'storii already has a passkey for this account.' };
+  }
+  const d = await askPasskey({ op, rpId: data.rpId, rpName: data.rpName, user: data.user, allow: data.allow || [] });
+  if (d.action === 'fallback') return { fallback: true };
+  const all = await items();
+  if (!all || (d.action !== 'save' && d.action !== 'use')) return NOT_ALLOWED;
+  await touch();
+  if (op === 'create') {
+    const { passkey: pk, response } = await createPasskey({ rpId: data.rpId, origin, challenge: data.challenge, user: data.user, crossOrigin });
+    const changes = [];
+    let ctxId = [...all].find(([, it]) => contextMatches(it, data.rpId))?.[0];
+    if (!ctxId) {
+      ctxId = crypto.randomUUID();
+      changes.push({ id: ctxId, item: { kind: 'context', name: data.rpId, context_type: 'website', urls: [`https://${data.rpId}`] } });
+    }
+    changes.push({ id: undefined, item: { kind: 'secret', type: 'passkey', name: data.rpName || data.rpId, contexts: [ctxId], fields: pk } });
+    await write(changes);
+    return { credential: response };
+  }
+  const it = all.get(d.id);
+  if (!it || it.type !== 'passkey' || it.fields?.rp_id !== data.rpId) return NOT_ALLOWED;
+  return { credential: await assertPasskey({ passkey: it.fields, origin, challenge: data.challenge, crossOrigin }) };
+}
+
 // Messages.
 
 const handlers = {
+  passkey,
   // Anyone (popup or content script).
   async status() {
     const state = await getState();
@@ -338,6 +460,23 @@ const handlers = {
     return { locked: false, items: found.filter((s) => s.type === 'password' || s.type === 'totp')
       .map((s) => ({ id: s.id, name: s.name, type: s.type, username: s.fields?.username || s.fields?.account || '' })) };
   },
+  // Cards aren't tied to a site: any checkout may list them (name and last digits only).
+  async cards() {
+    const all = await items();
+    if (!all) return { locked: true, items: [] };
+    return { locked: false, items: [...all].filter(([, it]) => it.kind === 'secret' && it.type === 'card')
+      .map(([id, it]) => ({ id, name: it.name, last4: cardDigits(it.fields?.number).slice(-4), brand: cardBrand(it.fields?.number) })) };
+  },
+  // Fills a card the user picked into the tab's frames that may take it: the page's own site and payment providers'
+  // frames (card fields often sit in Stripe-style iframes, one per field). Each frame checks that itself.
+  async fillCard({ id }, sender) {
+    const it = (await items())?.get(id);
+    if (!it || it.type !== 'card' || !sender.tab) throw new Error('no such card');
+    await touch();
+    const f = it.fields || {};
+    await chrome.tabs.sendMessage(sender.tab.id, { type: 'fillCard', topHost: hostOf(sender.tab.url || ''),
+      card: { cardholder: f.cardholder || '', number: cardDigits(f.number), expiry: f.expiry || '', cvc: f.cvc || '' } });
+  },
   async credential({ id }, sender) {
     const s = (await secretsForHost(senderHost(sender))).find((x) => x.id === id);
     if (!s) throw new Error('that secret does not belong to this site');
@@ -351,7 +490,12 @@ const handlers = {
   async pendingSave(_msg, sender) {
     if (!sender.tab || !(await getVaultKey())) return null;
     const p = await pendingFor(sender.tab.id);
-    return p && p.host === senderHost(sender) ? { host: p.host, username: p.username, update: !!p.existingId } : null;
+    if (!p) return null;
+    // Pages often redirect right after a login, also to another host (login.example.com → app.example.com, SSO):
+    // offer it on the page the tab ends up on. Same site for 5 minutes, any site for the first minute.
+    const here = senderHost(sender);
+    if (here !== p.host && siteOf(here) !== siteOf(p.host) && Date.now() - p.at > 60 * 1000) return null;
+    return { host: p.host, username: p.username, update: !!p.existingId };
   },
   async confirmSave({ save }, sender) {
     if (!save) return void (await pendingSaves.delete(sender.tab.id));
@@ -360,8 +504,31 @@ const handlers = {
 };
 
 const popupHandlers = {
+  async passkeyRequest({ reqId }) {
+    const p = passkeyReqs.get(reqId);
+    if (!p) return null;
+    const all = await items();
+    const passkeys = p.req.op === 'get' && all ? passkeysFor(all, p.req.rpId, p.req.allow)
+      .map(([id, it]) => ({ id, name: it.name, user: it.fields.user_name || it.fields.user_display_name || '' })) : [];
+    return { ...p.req, passkeys };
+  },
+  async passkeyDecision({ reqId, action, id }) {
+    const p = passkeyReqs.get(reqId);
+    if (!p) return;
+    passkeyReqs.delete(reqId);
+    p.resolve({ action, id });
+  },
   login,
   unlock,
+  quickUnlock,
+  quickUnlockSetup,
+  async quickUnlockInfo() {
+    const { quickUnlock: q } = await chrome.storage.local.get('quickUnlock');
+    return q ? { credentialId: q.credentialId, salt: q.salt } : null;
+  },
+  async quickUnlockOff() {
+    await chrome.storage.local.remove('quickUnlock');
+  },
   lock,
   logout,
   sync,
@@ -396,11 +563,14 @@ const popupHandlers = {
   },
   // Fill a secret the user picked in the popup into the active tab.
   async fillTab({ tabId, id }) {
-    const s = (await items())?.get(id);
+    const all = await items();
+    const s = all?.get(id);
     if (!s) throw new Error('locked');
     const payload = s.type === 'totp' ? { code: await totpCode(totpFromFields(s.fields)) }
       : { username: s.fields?.username || '', password: s.fields?.password || '' };
-    await chrome.tabs.sendMessage(tabId, { type: 'fill', ...payload });
+    // Only frames on the secret's own sites fill it, never a third-party iframe on the page.
+    const hosts = (s.contexts || []).flatMap((c) => all.get(c)?.urls || []).map(hostOf).filter(Boolean);
+    await chrome.tabs.sendMessage(tabId, { type: 'fill', hosts, ...payload });
   },
 };
 

@@ -1,7 +1,7 @@
 {
   "name": "storii-extension",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.2.0",
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
@@ -9,6 +9,7 @@
     "e2e": "node build.mjs && node --test test/e2e/"
   },
   "devDependencies": {
+    "@simplewebauthn/server": "14.0.3",
     "hash-wasm": "4.12.0",
     "playwright": "1.65.0",
     "puppeteer-core": "24.10.0",

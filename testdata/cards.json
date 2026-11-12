@@ -1,0 +1,111 @@
+{
+  "comment": "Card checks shared by the Go, Kotlin, Swift and JS tests: brand from the number, Luhn validity, the masked form, and expiry normalisation (\"\" = invalid).",
+  "numbers": [
+    {
+      "number": "4242 4242 4242 4242",
+      "brand": "visa",
+      "valid": true,
+      "masked": "•••• 4242"
+    },
+    {
+      "number": "4000-0566-5566-5556",
+      "brand": "visa",
+      "valid": true,
+      "masked": "•••• 5556"
+    },
+    {
+      "number": "5555555555554444",
+      "brand": "mastercard",
+      "valid": true,
+      "masked": "•••• 4444"
+    },
+    {
+      "number": "2223003122003222",
+      "brand": "mastercard",
+      "valid": true,
+      "masked": "•••• 3222"
+    },
+    {
+      "number": "378282246310005",
+      "brand": "amex",
+      "valid": true,
+      "masked": "•••• 0005"
+    },
+    {
+      "number": "6011111111111117",
+      "brand": "discover",
+      "valid": true,
+      "masked": "•••• 1117"
+    },
+    {
+      "number": "3530111333300000",
+      "brand": "jcb",
+      "valid": true,
+      "masked": "•••• 0000"
+    },
+    {
+      "number": "36227206271667",
+      "brand": "diners",
+      "valid": true,
+      "masked": "•••• 1667"
+    },
+    {
+      "number": "6200000000000005",
+      "brand": "unionpay",
+      "valid": true,
+      "masked": "•••• 0005"
+    },
+    {
+      "number": "6759649826438453",
+      "brand": "maestro",
+      "valid": true,
+      "masked": "•••• 8453"
+    },
+    {
+      "number": "4242424242424241",
+      "brand": "visa",
+      "valid": false,
+      "masked": "•••• 4241"
+    },
+    {
+      "number": "1234",
+      "brand": "",
+      "valid": false,
+      "masked": "•••• 1234"
+    }
+  ],
+  "expiry": [
+    {
+      "input": "12/29",
+      "normalized": "12/29"
+    },
+    {
+      "input": "1/30",
+      "normalized": "01/30"
+    },
+    {
+      "input": "12/2029",
+      "normalized": "12/29"
+    },
+    {
+      "input": "1229",
+      "normalized": "12/29"
+    },
+    {
+      "input": " 03 / 27 ",
+      "normalized": "03/27"
+    },
+    {
+      "input": "13/29",
+      "normalized": ""
+    },
+    {
+      "input": "00/29",
+      "normalized": ""
+    },
+    {
+      "input": "12",
+      "normalized": ""
+    }
+  ]
+}

@@ -14,6 +14,8 @@ CLI covers the terminal.
   - 2FA / TOTP codes (RFC 6238; scan or paste `otpauth://` QR codes)
   - API keys
   - notes
+  - payment cards (number, expiry, CVC; brand detection and a typo check)
+  - passkeys (created and used by the browser extension; synced, and listed in every app)
   - custom fields on any of them
 - **Contexts**: a website or app that secrets belong to. One secret can be in several contexts, e.g. an API key
   used by two services, or a login shared by `google.com` and the Gmail app. Autofill offers the secrets of the
@@ -24,11 +26,11 @@ CLI covers the terminal.
 
   | Client                                       | Fills                                                           | Saves new logins        |
   |----------------------------------------------|-----------------------------------------------------------------|-------------------------|
-  | Browser extension (Chrome, Edge, Firefox)    | logins and 2FA codes, including split one-box-per-digit inputs  | yes                     |
-  | Android (Autofill service, apps and browsers)| logins and 2FA codes, with inline keyboard suggestions          | yes                     |
+  | Browser extension (Chrome, Edge, Firefox)    | logins, 2FA codes (also split one-box-per-digit inputs) and cards; suggests strong passwords on sign-up and reset forms; passkeys | yes                     |
+  | Android (Autofill service, apps and browsers)| logins, 2FA codes and cards, with inline keyboard suggestions   | yes                     |
   | iOS / iPadOS (AutoFill credential provider)  | passwords and 2FA codes (iOS 18+), in QuickType and the sheet   | no (iOS doesn't allow it) |
   | macOS (AutoFill credential provider)         | passwords and 2FA codes (macOS 15+) in Safari and apps; menu bar search | no (macOS doesn't allow it) |
-  | Windows tray app                             | a hotkey search (Ctrl+Shift+Space) that copies; kept out of clipboard history | no            |
+  | Windows tray app                             | a hotkey search (Ctrl+Shift+Space) that copies (cards: number, Shift+Enter expiry, Ctrl+Enter CVC); kept out of clipboard history | no            |
   | CLI (Linux, macOS, Windows)                  | copies to the clipboard (cleared after 30 s) or prints          | `storii add`            |
 
 - **Offline**: every client keeps an encrypted copy and unlocks without the server. Changes sync when online.

@@ -28,6 +28,8 @@ struct TypeIcon: View {
         case Item.password: "key.fill"
         case Item.totp: "clock.badge.checkmark"
         case Item.apiKey: "chevron.left.forwardslash.chevron.right"
+        case Item.card: "creditcard"
+        case Item.passkey: "person.badge.key.fill"
         default: "note.text"
         }
     }

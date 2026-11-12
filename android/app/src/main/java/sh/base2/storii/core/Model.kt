@@ -58,7 +58,10 @@ data class Item(
         const val TOTP = "totp"
         const val API_KEY = "api_key"
         const val NOTE = "note"
-        val TYPES = listOf(PASSWORD, TOTP, API_KEY, NOTE)
+        const val CARD = "card"
+        /** Created by the browser extension; listed, not edited. */
+        const val PASSKEY = "passkey"
+        val TYPES = listOf(PASSWORD, TOTP, API_KEY, NOTE, CARD)
 
         fun now(): String = Instant.now().truncatedTo(ChronoUnit.SECONDS).toString()
     }
@@ -72,5 +75,7 @@ fun typeLabel(type: String?) = when (type) {
     Item.TOTP -> "2FA code"
     Item.API_KEY -> "API key"
     Item.NOTE -> "Note"
+    Item.CARD -> "Card"
+    Item.PASSKEY -> "Passkey"
     else -> type ?: "?"
 }

@@ -52,6 +52,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import kotlinx.coroutines.launch
+import sh.base2.storii.core.Card
 import sh.base2.storii.core.Item
 import sh.base2.storii.core.Match
 import sh.base2.storii.core.Totp
@@ -88,6 +89,10 @@ fun EditScreen(nav: NavController, id: String?, initialType: String?) {
     var account by rememberSaveable { mutableStateOf(existing?.field("account").orEmpty()) }
     var key by rememberSaveable { mutableStateOf(existing?.field("key").orEmpty()) }
     var keyId by rememberSaveable { mutableStateOf(existing?.field("key_id").orEmpty()) }
+    var cardholder by rememberSaveable { mutableStateOf(existing?.field("cardholder").orEmpty()) }
+    var number by rememberSaveable { mutableStateOf(existing?.field("number").orEmpty()) }
+    var expiry by rememberSaveable { mutableStateOf(existing?.field("expiry").orEmpty()) }
+    var cvc by rememberSaveable { mutableStateOf(existing?.field("cvc").orEmpty()) }
     var notes by rememberSaveable { mutableStateOf(existing?.notes.orEmpty()) }
     val contexts = remember { mutableStateListOf<String>().apply { addAll(existing?.contexts.orEmpty()) } }
     // New contexts made here, saved together with the secret.
@@ -131,7 +136,21 @@ fun EditScreen(nav: NavController, id: String?, initialType: String?) {
                 return
             }
             Item.API_KEY -> mapOf("key" to key, "key_id" to keyId)
-            else -> emptyMap()
+            Item.CARD -> {
+                if (!Card.valid(number)) {
+                    error = "That card number isn't valid. Check for a typo."
+                    return
+                }
+                val exp = if (expiry.isBlank()) "" else Card.normalizeExpiry(expiry)
+                if (expiry.isNotBlank() && exp.isEmpty()) {
+                    error = "Write the expiry as MM/YY."
+                    return
+                }
+                if (name.isBlank()) name = "${Card.displayBrand(number).ifEmpty { "Card" }} ${Card.digits(number).takeLast(4)}"
+                mapOf("cardholder" to cardholder.trim(), "number" to Card.digits(number), "expiry" to exp, "cvc" to cvc.trim())
+            }
+            // Types without fields here (notes, passkeys) keep what they have: renaming a passkey must not drop its key.
+            else -> existing?.fields.orEmpty()
         }.filterValues { it.isNotEmpty() }
         if (name.isBlank()) {
             error = "Give it a name."
@@ -200,6 +219,16 @@ fun EditScreen(nav: NavController, id: String?, initialType: String?) {
                 Item.API_KEY -> {
                     PasswordField(key, { key = it }, "Key")
                     OutlinedTextField(keyId, { keyId = it }, label = { Text("Key ID (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                }
+                Item.CARD -> {
+                    OutlinedTextField(cardholder, { cardholder = it }, label = { Text("Cardholder") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(number, { number = it }, label = { Text("Card number") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                        supportingText = { Text(Card.displayBrand(number).ifEmpty { " " }) })
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(expiry, { expiry = it }, label = { Text("Expiry (MM/YY)") }, singleLine = true, modifier = Modifier.weight(1f))
+                        PasswordField(cvc, { cvc = it }, "CVC", Modifier.weight(1f))
+                    }
                 }
             }
             OutlinedTextField(notes, { notes = it }, label = { Text(if (type == Item.NOTE) "Note" else "Notes") },

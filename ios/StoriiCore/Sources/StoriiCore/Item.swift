@@ -32,8 +32,10 @@ public struct CustomField: Codable, Equatable, Hashable, Sendable {
 /// omitempty, so every client writes the same shape.
 public struct Item: Codable, Equatable, Hashable, Sendable {
     public static let kindSecret = "secret", kindContext = "context"
-    public static let password = "password", totp = "totp", apiKey = "api_key", note = "note"
-    public static let types = [password, totp, apiKey, note]
+    public static let password = "password", totp = "totp", apiKey = "api_key", note = "note", card = "card"
+    /// Created by the browser extension; listed, not edited.
+    public static let passkey = "passkey"
+    public static let types = [password, totp, apiKey, note, card]
     public static let contextTypes = ["website", "app", "other"]
 
     public var kind: String
@@ -89,6 +91,7 @@ public struct Item: Codable, Equatable, Hashable, Sendable {
         case Item.password: return field("password")
         case Item.totp: return try TOTP(fields: fields).code(at: now)
         case Item.apiKey: return field("key")
+        case Item.card: return Card.digits(field("number"))
         default: return notes ?? ""
         }
     }
@@ -97,7 +100,7 @@ public struct Item: Codable, Equatable, Hashable, Sendable {
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { throw StoriiError("Give it a name.") }
         switch kind {
         case Item.kindSecret:
-            guard let type, Item.types.contains(type) else { throw StoriiError("Unknown secret type \(type ?? "")") }
+            guard let type, (Item.types + [Item.passkey]).contains(type) else { throw StoriiError("Unknown secret type \(type ?? "")") }
             if type == Item.totp { _ = try TOTP(fields: fields) }
         case Item.kindContext:
             guard let contextType, Item.contextTypes.contains(contextType) else {
@@ -178,6 +181,8 @@ public func typeLabel(_ type: String?) -> String {
     case Item.totp: "2FA code"
     case Item.apiKey: "API key"
     case Item.note: "Note"
+    case Item.card: "Card"
+    case Item.passkey: "Passkey"
     default: type ?? "?"
     }
 }

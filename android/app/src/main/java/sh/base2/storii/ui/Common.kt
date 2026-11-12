@@ -144,7 +144,8 @@ fun Logo() {
  * is open.
  */
 @Composable
-fun UnlockPane(activity: FragmentActivity, username: String, server: String, onUnlocked: () -> Unit, extra: @Composable () -> Unit = {}) {
+fun UnlockPane(activity: FragmentActivity, username: String, server: String, onUnlocked: () -> Unit, compact: Boolean = false,
+               extra: @Composable () -> Unit = {}) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var password by rememberSaveable { mutableStateOf("") }
@@ -152,6 +153,8 @@ fun UnlockPane(activity: FragmentActivity, username: String, server: String, onU
     var error by remember { mutableStateOf<String?>(null) }
     val bio = remember { Biometric.enabled(ctx) && Biometric.available(ctx) }
     val focus = remember { FocusRequester() }
+    // In the compact (autofill) form, only the system's biometric prompt shows until it's cancelled.
+    var formShown by remember { mutableStateOf(!(compact && bio)) }
 
     fun biometric() = scope.launch {
         try {
@@ -163,8 +166,10 @@ fun UnlockPane(activity: FragmentActivity, username: String, server: String, onU
             ctx.vault.unlockWithKey(key)
             onUnlocked()
         } catch (e: BiometricCancelled) {
-            focus.requestFocus()
+            formShown = true
+            runCatching { focus.requestFocus() }
         } catch (e: Exception) {
+            formShown = true
             error = e.message
         }
     }
@@ -186,10 +191,16 @@ fun UnlockPane(activity: FragmentActivity, username: String, server: String, onU
     }
 
     LaunchedEffect(Unit) { if (bio) biometric() else focus.requestFocus() }
+    LaunchedEffect(formShown) { if (formShown && compact) runCatching { focus.requestFocus() } }
 
-    FormPage {
-        Logo()
-        Text("storii is locked", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+    if (!formShown) return
+    val page: @Composable (@Composable () -> Unit) -> Unit = if (compact) { c ->
+        Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { c() }
+    } else { c -> FormPage(c) }
+    page {
+        if (!compact) Logo()
+        Text("storii is locked", style = if (compact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.SemiBold)
         Text("$username · $server", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         PasswordField(password, { password = it }, "Master password", Modifier.focusRequester(focus), ImeAction.Go, ::submit)
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -213,6 +224,8 @@ fun TypeBadge(type: String?, modifier: Modifier = Modifier) {
         Item.PASSWORD -> "••" to MaterialTheme.colorScheme.primary
         Item.TOTP -> "2F" to Color(0xFF2E8B57)
         Item.API_KEY -> "{ }" to Color(0xFFB8741A)
+        Item.CARD -> "▭" to Color(0xFF3A6FB0)
+        Item.PASSKEY -> "⚿" to Color(0xFF6A4FB0)
         Item.NOTE -> "¶" to MaterialTheme.colorScheme.tertiary
         "website" -> "◍" to MaterialTheme.colorScheme.primary
         "app" -> "▣" to MaterialTheme.colorScheme.primary

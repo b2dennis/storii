@@ -69,6 +69,7 @@ import androidx.navigation.NavController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import sh.base2.storii.core.Entry
+import sh.base2.storii.core.Card
 import sh.base2.storii.core.Item
 import sh.base2.storii.core.Totp
 import sh.base2.storii.core.typeLabel
@@ -148,7 +149,7 @@ fun SetupScreen(prefill: Pair<String, String>?) {
     }
 }
 
-private val FILTERS = listOf(null to "All", Item.PASSWORD to "Passwords", Item.TOTP to "2FA", Item.API_KEY to "API keys", Item.NOTE to "Notes")
+private val FILTERS = listOf(null to "All", Item.PASSWORD to "Passwords", Item.TOTP to "2FA", Item.API_KEY to "API keys", Item.NOTE to "Notes", Item.CARD to "Cards")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -224,6 +225,8 @@ private fun SecretRow(e: Entry, contexts: Map<String, Item>, now: Long, onClick:
                 Item.PASSWORD -> item.field("username")
                 Item.TOTP -> listOf(item.field("issuer"), item.field("account")).filter { it.isNotEmpty() }.joinToString(" · ")
                 Item.API_KEY -> item.field("key_id")
+                Item.PASSKEY -> listOf(item.field("user_name"), item.field("rp_id")).filter { it.isNotEmpty() }.joinToString(" · ")
+                Item.CARD -> listOf(Card.masked(item.field("number")), item.field("expiry")).filter { it.isNotEmpty() }.joinToString(" · ")
                 else -> item.notes.orEmpty().lineSequence().firstOrNull().orEmpty()
             }
             val ctxNames = item.contexts.mapNotNull { contexts[it]?.name }.joinToString(", ")
@@ -241,6 +244,7 @@ private fun SecretRow(e: Entry, contexts: Map<String, Item>, now: Long, onClick:
         val value = when (item.type) {
             Item.PASSWORD -> item.field("password")
             Item.API_KEY -> item.field("key")
+            Item.CARD -> Card.digits(item.field("number"))
             Item.TOTP -> totp?.code(now)
             else -> null
         }
@@ -289,8 +293,20 @@ fun DetailScreen(nav: NavController, id: String) {
                     if (f["key_id"].orEmpty().isNotEmpty()) FieldRow("Key ID", f["key_id"]!!, secret = false)
                     FieldRow("Key", f["key"].orEmpty(), secret = true)
                 }
+                Item.PASSKEY -> {
+                    FieldRow("Website", f["rp_id"].orEmpty(), secret = false)
+                    if (f["user_name"].orEmpty().isNotEmpty()) FieldRow("Account", f["user_name"]!!, secret = false)
+                }
+                Item.CARD -> {
+                    if (f["cardholder"].orEmpty().isNotEmpty()) FieldRow("Cardholder", f["cardholder"]!!, secret = false)
+                    val number = f["number"].orEmpty()
+                    FieldRow(listOf("Number", Card.displayBrand(number)).filter { it.isNotEmpty() }.joinToString(" · "), Card.digits(number), secret = true)
+                    if (f["expiry"].orEmpty().isNotEmpty()) FieldRow("Expiry", f["expiry"]!!, secret = false)
+                    if (f["cvc"].orEmpty().isNotEmpty()) FieldRow("CVC", f["cvc"]!!, secret = true)
+                }
             }
-            val known = setOf("username", "password", "secret", "issuer", "account", "algorithm", "digits", "period", "key", "key_id")
+            val known = setOf("username", "password", "secret", "issuer", "account", "algorithm", "digits", "period", "key", "key_id",
+                "cardholder", "number", "expiry", "cvc", "credential_id", "rp_id", "user_handle", "user_name", "user_display_name", "private_key")
             f.filterKeys { it !in known }.forEach { (k, v) -> FieldRow(k, v, secret = false) }
             item.custom.forEach { FieldRow(it.name, it.value, secret = it.hidden) }
             if (!item.notes.isNullOrEmpty()) {

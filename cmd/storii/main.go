@@ -31,7 +31,7 @@ Account
   storii sessions                                list logged-in devices
   storii sync                                    fetch changes from the server
 
-Secrets (types: password, totp, api_key, note)
+Secrets (types: password, totp, api_key, note, card)
   storii ls [QUERY] [--type T] [--context NAME] [--site HOST]
   storii show NAME [--reveal]
   storii get NAME [--print]        copy the password / current 2FA code / API key / note
@@ -41,6 +41,7 @@ Secrets (types: password, totp, api_key, note)
   storii add totp NAME (--uri otpauth://... | --secret BASE32 [--issuer I] [--account A]) [--url URL]... [--context C]...
   storii add apikey NAME [--key-id ID] [--url URL]... [--context C]...   (prompts for the key)
   storii add note NAME [--context C]...                                  (reads the note from stdin)
+  storii add card NAME [--holder NAME] [--expiry MM/YY]                  (prompts for the number and CVC)
   storii edit NAME [--name N] [--user U] [--password] [--gen] [--notes TEXT] [--field K=V]...
                    [--context C]... [--unlink C]...
   storii rm NAME [--yes]
@@ -347,6 +348,10 @@ func typeLabel(t string) string {
 		return "api key"
 	case vault.TypeNote:
 		return "note"
+	case vault.TypeCard:
+		return "card"
+	case vault.TypePasskey:
+		return "passkey"
 	}
 	return t
 }
@@ -395,8 +400,13 @@ func cmdList(v *client.Vault, args []string) error {
 			continue
 		}
 		line := fmt.Sprintf("%s  %-9s %s", e.ID[:8], typeLabel(e.Type), e.Name)
-		if u := e.Field(vault.FieldUsername); u != "" {
-			line += "  (" + u + ")"
+		switch {
+		case e.Field(vault.FieldUsername) != "":
+			line += "  (" + e.Field(vault.FieldUsername) + ")"
+		case e.Type == vault.TypeCard && e.Field(vault.FieldNumber) != "":
+			line += "  " + vault.CardMasked(e.Field(vault.FieldNumber))
+		case e.Type == vault.TypePasskey && e.Field("user_name") != "":
+			line += "  (" + e.Field("user_name") + ")"
 		}
 		if names != "" {
 			line += "  [" + names + "]"
@@ -445,10 +455,24 @@ func cmdShow(v *client.Vault, args []string) error {
 			fmt.Printf("  key id:   %s\n", id)
 		}
 		fmt.Printf("  key:      %s\n", mask(e.Field(vault.FieldKey)))
+	case vault.TypePasskey:
+		fmt.Printf("  website:  %s\n  account:  %s\n", e.Field("rp_id"), e.Field("user_name"))
+	case vault.TypeCard:
+		num := vault.CardMasked(e.Field(vault.FieldNumber))
+		if *reveal {
+			num = e.Field(vault.FieldNumber)
+		}
+		if b := vault.CardBrand(e.Field(vault.FieldNumber)); b != "" {
+			num += " (" + b + ")"
+		}
+		fmt.Printf("  holder:   %s\n  number:   %s\n  expiry:   %s\n  cvc:      %s\n", e.Field(vault.FieldCardholder), num,
+			e.Field(vault.FieldExpiry), mask(e.Field(vault.FieldCVC)))
 	}
 	known := map[string]bool{vault.FieldUsername: true, vault.FieldPassword: true, vault.FieldSecret: true,
 		vault.FieldIssuer: true, vault.FieldAccount: true, vault.FieldAlgorithm: true, vault.FieldDigits: true,
-		vault.FieldPeriod: true, vault.FieldKey: true, vault.FieldKeyID: true}
+		vault.FieldPeriod: true, vault.FieldKey: true, vault.FieldKeyID: true, vault.FieldCardholder: true,
+		vault.FieldNumber: true, vault.FieldExpiry: true, vault.FieldCVC: true, "credential_id": true, "rp_id": true,
+		"user_handle": true, "user_name": true, "user_display_name": true, "private_key": true}
 	for k, val := range e.Fields {
 		if !known[k] {
 			fmt.Printf("  %s: %s\n", k, val)
@@ -619,7 +643,7 @@ func linkContexts(v *client.Vault, secret *vault.Item, urls, names []string, pen
 
 func cmdAdd(ctx context.Context, v *client.Vault, args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: storii add password|totp|apikey|note NAME ...")
+		return errors.New("usage: storii add password|totp|apikey|note|card NAME ...")
 	}
 	typ := args[0]
 	fs := newFlags("add")
@@ -634,6 +658,8 @@ func cmdAdd(ctx context.Context, v *client.Vault, args []string) error {
 	issuer := fs.String("issuer", "", "TOTP issuer")
 	account := fs.String("account", "", "TOTP account")
 	keyID := fs.String("key-id", "", "API key id")
+	holder := fs.String("holder", "", "cardholder name")
+	expiry := fs.String("expiry", "", "card expiry, MM/YY")
 	notes := fs.String("notes", "", "notes")
 	pos, err := parse(fs, args[1:])
 	if err != nil {
@@ -696,8 +722,30 @@ func cmdAdd(ctx context.Context, v *client.Vault, args []string) error {
 			}
 			it.Notes = strings.TrimRight(b.String(), "\n")
 		}
+	case "card":
+		it.Type = vault.TypeCard
+		it.Fields[vault.FieldCardholder] = *holder
+		num, err := promptHidden("Card number: ")
+		if err != nil {
+			return err
+		}
+		if !vault.CardValid(num) {
+			return errors.New("that card number isn't valid (check for a typo)")
+		}
+		it.Fields[vault.FieldNumber] = vault.CardDigits(num)
+		if *expiry == "" {
+			if *expiry, err = prompt("Expiry (MM/YY): "); err != nil {
+				return err
+			}
+		}
+		if it.Fields[vault.FieldExpiry] = vault.NormalizeExpiry(*expiry); it.Fields[vault.FieldExpiry] == "" {
+			return fmt.Errorf("expiry %q isn't MM/YY", *expiry)
+		}
+		if it.Fields[vault.FieldCVC], err = promptHidden("CVC (empty if none): "); err != nil {
+			return err
+		}
 	default:
-		return fmt.Errorf("unknown type %q: use password, totp, apikey or note", typ)
+		return fmt.Errorf("unknown type %q: use password, totp, apikey, note or card", typ)
 	}
 	pending := map[string]vault.Item{}
 	if err := linkContexts(v, &it, urls, ctxs, pending); err != nil {
@@ -756,7 +804,7 @@ func cmdEdit(ctx context.Context, v *client.Vault, args []string) error {
 	}
 	if *newPw {
 		field := map[string]string{vault.TypePassword: vault.FieldPassword, vault.TypeAPIKey: vault.FieldKey,
-			vault.TypeTOTP: vault.FieldSecret}[it.Type]
+			vault.TypeTOTP: vault.FieldSecret, vault.TypeCard: vault.FieldNumber}[it.Type]
 		if field == "" {
 			return errors.New("notes have no secret value; use --notes")
 		}

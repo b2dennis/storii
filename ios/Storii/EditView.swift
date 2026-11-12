@@ -46,6 +46,13 @@ struct EditView: View {
                         TextField("Key ID (optional)", text: binding("key_id")).monospaced().plainInput()
                         TextField("Key", text: binding("key"), axis: .vertical).monospaced().plainInput()
                     }
+                case Item.card:
+                    Section {
+                        TextField("Cardholder", text: binding("cardholder")).plainInput()
+                        TextField("Card number", text: binding("number")).monospaced().plainInput()
+                        TextField("Expiry (MM/YY)", text: binding("expiry")).monospaced().plainInput()
+                        SecureField("CVC", text: binding("cvc"))
+                    } header: { Text("Card") } footer: { Text(Card.displayBrand(item.field("number"))) }
                 default: EmptyView()
                 }
                 contextsSection
@@ -233,6 +240,18 @@ struct EditView: View {
     private func save() {
         item.name = item.name.trimmingCharacters(in: .whitespaces)
         item.custom.removeAll { $0.name.isEmpty && $0.value.isEmpty }
+        if item.type == Item.card {
+            guard Card.valid(item.field("number")) else { localError = "That card number isn't valid. Check for a typo."; return }
+            item.fields["number"] = Card.digits(item.field("number"))
+            if !item.field("expiry").isEmpty {
+                let e = Card.normalizeExpiry(item.field("expiry"))
+                guard !e.isEmpty else { localError = "Write the expiry as MM/YY."; return }
+                item.fields["expiry"] = e
+            }
+            if item.name.isEmpty {
+                item.name = "\(Card.displayBrand(item.field("number")).isEmpty ? "Card" : Card.displayBrand(item.field("number"))) \(Card.digits(item.field("number")).suffix(4))"
+            }
+        }
         if item.type == Item.totp, var s = item.fields["secret"] {
             s.removeAll { $0 == " " }
             item.fields["secret"] = s.uppercased()

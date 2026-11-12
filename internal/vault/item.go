@@ -20,6 +20,10 @@ const (
 	TypeTOTP     = "totp"
 	TypeAPIKey   = "api_key"
 	TypeNote     = "note"
+	TypeCard     = "card" // fields: FieldCardholder, FieldNumber, FieldExpiry, FieldCVC
+	// TypePasskey is a WebAuthn credential created by a storii client (the browser extension): fields credential_id,
+	// rp_id, user_handle (base64url), user_name, user_display_name and private_key (PKCS#8 P-256, base64url).
+	TypePasskey = "passkey"
 )
 
 // Field names per type. Unknown fields are kept and shown as text.
@@ -43,7 +47,7 @@ const (
 	ContextOther   = "other"
 )
 
-var SecretTypes = []string{TypePassword, TypeTOTP, TypeAPIKey, TypeNote}
+var SecretTypes = []string{TypePassword, TypeTOTP, TypeAPIKey, TypeNote, TypeCard, TypePasskey}
 
 // Item is the decrypted JSON of one stored item: either a secret or a context.
 type Item struct {
@@ -122,6 +126,10 @@ func (it Item) SecretValue(now time.Time) (string, error) {
 		return t.Code(now), nil
 	case TypeAPIKey:
 		return it.Field(FieldKey), nil
+	case TypeCard:
+		return CardDigits(it.Field(FieldNumber)), nil
+	case TypePasskey:
+		return "", errors.New("a passkey can't be copied: sites ask storii for it when you sign in")
 	default:
 		return it.Notes, nil
 	}

@@ -70,6 +70,8 @@ struct SecretRow: View {
         case Item.password: it.field("username")
         case Item.totp: [it.field("issuer"), it.field("account")].filter { !$0.isEmpty }.joined(separator: " · ")
         case Item.apiKey: it.field("key_id")
+        case Item.passkey: [it.field("user_name"), it.field("rp_id")].filter { !$0.isEmpty }.joined(separator: " · ")
+        case Item.card: [Card.masked(it.field("number")), it.field("expiry")].filter { !$0.isEmpty }.joined(separator: " · ")
         default: ""
         }
         let ctx = it.contexts.compactMap { model.items[$0]?.name }.joined(separator: ", ")
@@ -163,10 +165,21 @@ struct DetailView: View {
                     case Item.apiKey:
                         if !it.field("key_id").isEmpty { FieldRow(label: "Key ID", value: it.field("key_id"), mono: true) }
                         FieldRow(label: "Key", value: it.field("key"), secret: true, mono: true)
+                    case Item.passkey:
+                        FieldRow(label: "Website", value: it.field("rp_id"))
+                        if !it.field("user_name").isEmpty { FieldRow(label: "Account", value: it.field("user_name")) }
+                    case Item.card:
+                        if !it.field("cardholder").isEmpty { FieldRow(label: "Cardholder", value: it.field("cardholder")) }
+                        FieldRow(label: ["Number", Card.displayBrand(it.field("number"))].filter { !$0.isEmpty }.joined(separator: " · "),
+                                 value: Card.digits(it.field("number")), secret: true, mono: true)
+                        if !it.field("expiry").isEmpty { FieldRow(label: "Expiry", value: it.field("expiry"), mono: true) }
+                        if !it.field("cvc").isEmpty { FieldRow(label: "CVC", value: it.field("cvc"), secret: true, mono: true) }
                     default:
                         EmptyView()
                     }
-                    let known: Set<String> = ["username", "password", "secret", "issuer", "account", "algorithm", "digits", "period", "key", "key_id"]
+                    let known: Set<String> = ["username", "password", "secret", "issuer", "account", "algorithm", "digits", "period", "key", "key_id",
+                                              "cardholder", "number", "expiry", "cvc",
+                                              "credential_id", "rp_id", "user_handle", "user_name", "user_display_name", "private_key"]
                     ForEach(it.fields.keys.filter { !known.contains($0) }.sorted(), id: \.self) { k in
                         FieldRow(label: k, value: it.fields[k] ?? "")
                     }

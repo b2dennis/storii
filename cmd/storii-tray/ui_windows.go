@@ -623,6 +623,8 @@ func (u *ui) hints() string {
 		parts = append(parts, "Shift+Enter account")
 	case vault.TypeAPIKey:
 		parts = append(parts, "Shift+Enter key id")
+	case vault.TypeCard:
+		parts = append(parts, "Shift+Enter expiry", "Ctrl+Enter CVC")
 	}
 	if r.Has2FA {
 		parts = append(parts, "Ctrl+Enter 2FA code")

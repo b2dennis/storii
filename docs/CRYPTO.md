@@ -60,6 +60,8 @@ Secret types and their fields:
 | `password` | `username`, `password`                                                   | the password      |
 | `totp`     | `secret` (base32), `issuer`, `account`, `algorithm`, `digits`, `period`  | the current code  |
 | `api_key`  | `key`, `key_id`                                                          | the key           |
+| `card`     | `cardholder`, `number` (digits only), `expiry` (MM/YY), `cvc`           | the number        |
+| `passkey`  | `credential_id`, `rp_id`, `user_handle`, `user_name`, `user_display_name`, `private_key` (PKCS#8 P-256, base64url) | not copyable      |
 | `note`     | (the text is in `notes`)                                                 | the note          |
 
 TOTP is RFC 6238. The defaults are SHA1, 6 digits and 30 s, and defaults are left out of the fields.

@@ -135,6 +135,7 @@ struct QuickSearchView: View {
         case Item.password: it.field("username")
         case Item.totp: it.field("account")
         case Item.apiKey: it.field("key_id")
+        case Item.card: Card.masked(it.field("number"))
         default: ""
         }
     }

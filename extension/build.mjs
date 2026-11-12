@@ -13,7 +13,12 @@ const base = {
   permissions: ['storage', 'alarms', 'activeTab', 'clipboardWrite', 'clipboardRead'],
   host_permissions: ['<all_urls>'],
   action: { default_popup: 'popup/popup.html', default_title: 'storii', default_icon: { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png' } },
-  content_scripts: [{ matches: ['<all_urls>'], js: ['content.js'], all_frames: true, run_at: 'document_idle' }],
+  content_scripts: [
+    { matches: ['<all_urls>'], js: ['content.js'], all_frames: true, run_at: 'document_idle' },
+    // Passkeys: wraps navigator.credentials in the page's world before the page's own scripts run.
+    { matches: ['<all_urls>'], js: ['webauthn.js'], all_frames: true, run_at: 'document_start', world: 'MAIN' },
+    { matches: ['<all_urls>'], js: ['bridge.js'], all_frames: true, run_at: 'document_start' },
+  ],
   commands: {
     'fill-login': { suggested_key: { default: 'Ctrl+Shift+L', mac: 'Command+Shift+L' }, description: 'Fill the login or 2FA code for this page' },
     _execute_action: { suggested_key: { default: 'Ctrl+Shift+K', mac: 'Command+Shift+K' } },

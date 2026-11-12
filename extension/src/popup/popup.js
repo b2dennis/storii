@@ -1,11 +1,13 @@
 import { totpFromFields, totpFields, totpCode, totpRemaining, parseOtpauth } from '../lib/totp.js';
 import { host as hostOf, contextMatches } from '../lib/match.js';
+import { cardBrand, cardDigits, cardMasked, cardValid, normalizeExpiry } from '../lib/card.js';
 
 const app = document.getElementById('app');
+const PASSKEY_REQ = new URLSearchParams(location.search).get('passkey'); // a site's passkey request to approve
 if (new URLSearchParams(location.search).has('window')) document.body.classList.add('window');
 
-const TYPES = { password: 'Password', totp: '2FA code', api_key: 'API key', note: 'Note' };
-const BADGE = { password: '••', totp: '2F', api_key: '{}', note: '¶' };
+const TYPES = { password: 'Password', totp: '2FA code', api_key: 'API key', note: 'Note', card: 'Card', passkey: 'Passkey' };
+const BADGE = { password: '••', totp: '2F', api_key: '{}', note: '¶', card: '▭', passkey: '⚿' };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -52,6 +54,8 @@ function subtitle(s) {
   if (s.type === 'password') return s.fields?.username || '';
   if (s.type === 'totp') return [s.fields?.issuer, s.fields?.account].filter(Boolean).join(' · ');
   if (s.type === 'api_key') return s.fields?.key_id || 'API key';
+  if (s.type === 'passkey') return [s.fields?.user_name, s.fields?.rp_id].filter(Boolean).join(' · ');
+  if (s.type === 'card') return [cardMasked(s.fields?.number), s.fields?.expiry].filter(Boolean).join(' · ');
   return (s.notes || '').split('\n')[0];
 }
 
@@ -74,6 +78,7 @@ async function render() {
   } catch {
     return renderLocked(st);
   }
+  if (PASSKEY_REQ) return renderPasskey();
   ui.tab ||= await currentTab();
   if (ui.view === 'edit') return renderEdit();
   if (ui.view === 'detail') return renderDetail();
@@ -81,6 +86,37 @@ async function render() {
   if (ui.view === 'context') return renderContextEdit();
   if (ui.view === 'settings') return renderSettings(st);
   return renderList(st);
+}
+
+// A site asks to create or use a passkey: approve it here (the vault is unlocked by now).
+async function renderPasskey() {
+  const r = await call('passkeyRequest', { reqId: PASSKEY_REQ });
+  const decide = async (action, id) => {
+    await call('passkeyDecision', { reqId: PASSKEY_REQ, action, id });
+    window.close();
+  };
+  if (!r) {
+    app.innerHTML = '<div class="center"><p class="muted">This request has ended.</p></div>';
+    return void setTimeout(() => window.close(), 1500);
+  }
+  if (r.op === 'get' && !r.passkeys.length) return decide('fallback');
+  app.innerHTML = r.op === 'create' ? `<div class="center">
+      <h2>Save a passkey?</h2>
+      <p>For <b>${esc(r.rpId)}</b>${r.user?.name ? `, as <b>${esc(r.user.name)}</b>` : ''}.</p>
+      <p class="muted small">storii keeps it with your passwords and syncs it to your other devices.</p>
+      <button class="primary" id="save">Save in storii</button>
+      <button id="other">Use another device or passkey manager</button>
+      <button class="link" id="cancel">Cancel</button></div>` : `<div class="center">
+      <h2>Sign in with a passkey</h2>
+      <p class="muted small">${esc(r.rpId)}</p>
+      <div class="list" style="width:100%">${r.passkeys.map((p) => `<button class="pk" data-pk="${esc(p.id)}" style="width:100%;text-align:left">
+        <b>${esc(p.name)}</b><br><span class="muted small">${esc(p.user)}</span></button>`).join('')}</div>
+      <button id="other">Use another device or passkey manager</button>
+      <button class="link" id="cancel">Cancel</button></div>`;
+  document.getElementById('save')?.addEventListener('click', () => decide('save'));
+  app.querySelectorAll('[data-pk]').forEach((b) => (b.onclick = () => decide('use', b.dataset.pk)));
+  document.getElementById('other').onclick = () => decide('fallback');
+  document.getElementById('cancel').onclick = () => decide('cancel');
 }
 
 function renderSetup(register = false) {
@@ -120,6 +156,46 @@ function renderSetup(register = false) {
   $('server').focus();
 }
 
+// Quick unlock with a passkey (Windows Hello, Touch ID, a phone, a security key) through the WebAuthn PRF extension.
+const b64 = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
+const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
+async function quickSetup(st) {
+  if (!window.PublicKeyCredential) throw new Error('This browser has no passkey support.');
+  const salt = crypto.getRandomValues(new Uint8Array(32));
+  const cred = await navigator.credentials.create({ publicKey: {
+    rp: { name: 'storii' },
+    user: { id: crypto.getRandomValues(new Uint8Array(16)), name: `${st.username} (storii)`, displayName: `storii: ${st.username}` },
+    challenge: crypto.getRandomValues(new Uint8Array(32)),
+    pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+    authenticatorSelection: { userVerification: 'required', residentKey: 'discouraged' },
+    hints: ['client-device'],
+    extensions: { prf: { eval: { first: salt } } },
+  } });
+  const ext = cred.getClientExtensionResults().prf;
+  if (!ext?.enabled) throw new Error('This authenticator can’t unlock storii (it lacks the PRF extension). Try another one.');
+  // Some authenticators only evaluate PRF on sign-in, not at creation.
+  const prf = ext.results?.first || (await quickAssert(b64(cred.rawId), b64(salt)));
+  await call('quickUnlockSetup', { prf: b64(prf), credentialId: b64(cred.rawId), salt: b64(salt) });
+}
+
+async function quickAssert(credentialId, salt) {
+  const cred = await navigator.credentials.get({ publicKey: {
+    challenge: crypto.getRandomValues(new Uint8Array(32)),
+    allowCredentials: [{ type: 'public-key', id: unb64(credentialId) }],
+    userVerification: 'required',
+    extensions: { prf: { eval: { first: unb64(salt) } } },
+  } });
+  const first = cred.getClientExtensionResults().prf?.results?.first;
+  if (!first) throw new Error('The authenticator didn’t return a key.');
+  return first;
+}
+
+async function quickUnlockNow() {
+  const q = await call('quickUnlockInfo');
+  await call('quickUnlock', { prf: b64(await quickAssert(q.credentialId, q.salt)) });
+}
+
 function renderLocked(st) {
   if (st.expired) {
     app.innerHTML = `<div class="center"><h2>Session ended</h2>
@@ -140,14 +216,34 @@ function renderLocked(st) {
     <label>Master password<input id="pw" type="password" autocomplete="current-password" autofocus></label>
     <div class="err" id="err"></div>
     <button class="primary" id="go">Unlock</button>
+    <button id="quick" hidden>Unlock with passkey</button>
     <button class="link" id="out">Log out of this browser</button>
   </div>`;
   const pw = document.getElementById('pw');
+  const done = () => (document.body.classList.contains('window') && !PASSKEY_REQ ? window.close() : render());
+  call('quickUnlockInfo').then((q) => {
+    if (!q) return;
+    const b = document.getElementById('quick');
+    b.hidden = false;
+    const run = async () => {
+      document.getElementById('err').textContent = '';
+      try {
+        await quickUnlockNow();
+        done();
+      } catch (e) {
+        // Cancelled: leave the master password field for the user.
+        if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') document.getElementById('err').textContent = e.message;
+        pw.focus();
+      }
+    };
+    b.onclick = run;
+    run(); // straight away: one tap on the fingerprint reader, no typing
+  }).catch(() => {});
   const go = async () => {
     document.getElementById('go').disabled = true;
     try {
       await call('unlock', { password: pw.value });
-      if (document.body.classList.contains('window')) return window.close();
+      if (document.body.classList.contains('window') && !PASSKEY_REQ) return window.close();
       render();
     } catch (e) {
       document.getElementById('err').textContent = e.message;
@@ -215,7 +311,7 @@ function rowHtml(s, fill) {
     <div class="main"><div class="name">${esc(s.name)}</div><div class="sub">${esc(subtitle(s))}</div></div>
     ${isTotp ? `<span class="code" data-code="${s.id}"></span><span class="ring" data-ring="${s.id}"></span>` : ''}
     ${fill && (s.type === 'password' || isTotp) ? `<button class="icon" data-fill="${s.id}" title="Fill on this page">↧</button>` : ''}
-    ${s.type !== 'note' ? `<button class="icon" data-copy="${s.id}" title="Copy">⧉</button>` : ''}
+    ${s.type !== 'note' && s.type !== 'passkey' ? `<button class="icon" data-copy="${s.id}" title="Copy">⧉</button>` : ''}
   </div>`;
 }
 
@@ -240,6 +336,7 @@ function drawLists() {
     e.stopPropagation();
     const s = byId(b.dataset.copy);
     if (s.type === 'totp') return copy(await totpCode(totpFromFields(s.fields)), '2FA code');
+    if (s.type === 'card') return copy(cardDigits(s.fields.number), 'Card number');
     copy(s.type === 'api_key' ? s.fields.key : s.fields.password, TYPES[s.type]);
   }));
   lists.querySelectorAll('[data-fill]').forEach((b) => (b.onclick = async (e) => {
@@ -291,8 +388,17 @@ function renderDetail() {
   } else if (s.type === 'api_key') {
     if (f.key_id) body += field('Key ID', f.key_id);
     body += field('Key', f.key || '', { secret: true });
+  } else if (s.type === 'passkey') {
+    body += field('Website', f.rp_id || '', { copyable: false });
+    if (f.user_name) body += field('Account', f.user_name);
+    body += `<div class="muted small" style="margin:8px 0">Sites ask storii for this passkey when you sign in; it can't be copied.</div>`;
+  } else if (s.type === 'card') {
+    if (f.cardholder) body += field('Cardholder', f.cardholder);
+    body += field(['Number', cardBrand(f.number)].filter(Boolean).join(' · '), cardDigits(f.number), { secret: true, what: 'Card number' });
+    if (f.expiry) body += field('Expiry', f.expiry);
+    if (f.cvc) body += field('CVC', f.cvc, { secret: true, what: 'CVC' });
   }
-  const known = ['username', 'password', 'secret', 'issuer', 'account', 'algorithm', 'digits', 'period', 'key', 'key_id'];
+  const known = ['username', 'password', 'secret', 'issuer', 'account', 'algorithm', 'digits', 'period', 'key', 'key_id', 'cardholder', 'number', 'expiry', 'cvc'];
   for (const [k, v] of Object.entries(f)) if (!known.includes(k)) body += field(k, v);
   for (const c of s.custom || []) body += field(c.name, c.value, { secret: c.hidden });
   if (s.notes) body += `<div class="detail-field"><span class="k">Notes</span><span class="v" style="white-space:pre-wrap">${esc(s.notes)}</span></div>`;
@@ -347,12 +453,16 @@ function renderEdit() {
     api_key: `<label>Key<input data-f="key" value="${esc(f.key)}" type="password" autocomplete="off"></label>
       <label>Key ID (optional)<input data-f="key_id" value="${esc(f.key_id)}"></label>`,
     note: '',
+    card: `<label>Cardholder<input data-f="cardholder" value="${esc(f.cardholder)}" autocomplete="off"></label>
+      <label>Card number<input data-f="number" value="${esc(f.number)}" inputmode="numeric" autocomplete="off"></label>
+      <div class="row"><label>Expiry (MM/YY)<input data-f="expiry" value="${esc(f.expiry)}" placeholder="MM/YY" autocomplete="off"></label>
+      <label>CVC<input data-f="cvc" value="${esc(f.cvc)}" type="password" inputmode="numeric" autocomplete="off"></label></div>`,
   };
   const linked = d.contexts.map(byId).filter(Boolean);
   const siteHost = ui.tab ? hostOf(ui.tab.url) : '';
   const siteCtx = siteHost && contexts().find((c) => (c.urls || []).some((u) => hostOf(u) === siteHost));
   app.innerHTML = header(`<button class="icon" id="back">‹</button> ${existing ? 'Edit' : 'New secret'}`) + `<div class="form">
-    <label>Type<select id="type" ${existing ? 'disabled' : ''}>${Object.entries(TYPES).map(([k, v]) =>
+    <label>Type<select id="type" ${existing ? 'disabled' : ''}>${Object.entries(TYPES).filter(([k]) => k !== 'passkey' || existing).map(([k, v]) =>
       `<option value="${k}" ${d.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
     <label>Name<input id="name" value="${esc(d.name)}"></label>
     ${typeFields[d.type]}
@@ -381,7 +491,16 @@ function renderEdit() {
     return renderEdit();
   }
   $('back').onclick = () => { ui.view = existing ? 'detail' : 'list'; render(); };
-  $('type').onchange = () => { collect(); d.type = $('type').value; renderEdit(); };
+  $('type').onchange = () => {
+    collect();
+    d.type = $('type').value;
+    // A card belongs to no website by default (it's used on many).
+    if (d.type === 'card' && !existing) {
+      d._siteContext = false;
+      d.contexts = d.contexts.filter((c) => c !== siteCtx?.id);
+    }
+    renderEdit();
+  };
   $('gen')?.addEventListener('click', () => { const i = app.querySelector('[data-f=password]'); i.value = generate(); i.type = 'text'; });
   $('show')?.addEventListener('click', () => { const i = app.querySelector('[data-f=password]'); i.type = i.type === 'password' ? 'text' : 'password'; });
   $('nosite')?.addEventListener('click', () => { collect(); d._siteContext = false; renderEdit(); });
@@ -440,6 +559,15 @@ function renderEdit() {
       } catch (e) {
         return (err.textContent = e.message);
       }
+    }
+    if (d.type === 'card') {
+      if (!cardValid(f.number)) return (err.textContent = 'That card number isn’t valid. Check for a typo.');
+      item.fields.number = cardDigits(f.number);
+      if (f.expiry) {
+        item.fields.expiry = normalizeExpiry(f.expiry);
+        if (!item.fields.expiry) return (err.textContent = 'Write the expiry as MM/YY.');
+      }
+      if (!item.name) item.name = `${cardBrand(f.number) || 'Card'} ${cardDigits(f.number).slice(-4)}`.replace(/^./, (c) => c.toUpperCase());
     }
     if (!item.name) return (err.textContent = 'Give it a name.');
     const changes = [];
@@ -511,10 +639,29 @@ async function renderSettings(st) {
   app.innerHTML = header('<button class="icon" id="back">‹</button> Settings') + `<div class="form">
     <label>Lock after inactivity<select id="lock">${[1, 5, 15, 30, 60, 240, 0].map((m) =>
       `<option value="${m}" ${s.lockMinutes === m ? 'selected' : ''}>${m === 0 ? 'Only when the browser closes' : m < 60 ? `${m} minutes` : `${m / 60} hours`}</option>`).join('')}</select></label>
+    <div class="toggle"><label><input type="checkbox" id="quick" ${(await call('quickUnlockInfo')) ? 'checked' : ''}>
+      Unlock with a passkey</label>
+      <div class="muted small">Windows Hello, Touch ID, your phone or a security key instead of the master password. Set up per browser.</div>
+      <div class="err" id="qerr"></div></div>
     <div class="muted small">Logged in as <b>${esc(st.username)}</b> on ${esc(st.server)}.</div>
     <div class="muted small">Keyboard shortcut to fill the current page: Ctrl+Shift+L (change it in the browser’s extension shortcut settings).</div>
     <button id="out" class="danger">Log out of this browser</button></div>`;
   document.getElementById('back').onclick = () => { ui.view = 'list'; render(); };
+  document.getElementById('quick').onchange = async (e) => {
+    const box = e.target;
+    document.getElementById('qerr').textContent = '';
+    if (!box.checked) return call('quickUnlockOff').then(() => toast('Passkey unlock is off'));
+    box.disabled = true;
+    try {
+      await quickSetup(st);
+      toast('Passkey unlock is on');
+    } catch (err) {
+      box.checked = false;
+      if (err.name !== 'NotAllowedError' && err.name !== 'AbortError') document.getElementById('qerr').textContent = err.message;
+    } finally {
+      box.disabled = false;
+    }
+  };
   document.getElementById('lock').onchange = (e) => call('settings', { set: { lockMinutes: Number(e.target.value) } }).then(() => toast('Saved'));
   document.getElementById('out').onclick = async () => {
     if (!confirm('Log out? The local copy of the vault is removed from this browser.')) return;

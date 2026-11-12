@@ -436,12 +436,20 @@ func (a *app) act(r quick.Result, action rune) {
 		}
 		a.copyValue(r.ID, val, quick.What(it.Type))
 	case 'u':
+		if it.Type == vault.TypeCard {
+			a.copyValue(r.ID, it.Field(vault.FieldExpiry), "expiry date")
+			return
+		}
 		what := map[string]string{vault.TypePassword: "username", vault.TypeTOTP: "account", vault.TypeAPIKey: "key id"}[it.Type]
 		if what == "" {
 			return
 		}
 		a.copyValue(r.ID, quick.Username(it), what)
 	case 't':
+		if it.Type == vault.TypeCard {
+			a.copyValue(r.ID, it.Field(vault.FieldCVC), "security code")
+			return
+		}
 		id := r.ID
 		if it.Type != vault.TypeTOTP {
 			id = quick.Related2FA(a.v, r.ID)
@@ -481,7 +489,7 @@ func (a *app) createWindow() error {
 		return errors.New("could not register the window class")
 	}
 	a.hwnd = call(pCreateWindowExW, WS_EX_TOOLWINDOW|WS_EX_TOPMOST, uintptr(unsafe.Pointer(u16(className))),
-		uintptr(unsafe.Pointer(u16("storii"))), WS_POPUP, 0, 0, 100, 100, 0, 0, inst, 0)
+		uintptr(unsafe.Pointer(u16("storii"))), WS_POPUP|WS_CLIPCHILDREN, 0, 0, 100, 100, 0, 0, inst, 0)
 	if a.hwnd == 0 {
 		return errors.New("could not create the window")
 	}

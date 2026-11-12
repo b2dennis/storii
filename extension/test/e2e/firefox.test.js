@@ -58,21 +58,33 @@ const value = (page, sel) => page.$eval(sel, (e) => e.value);
 test('Firefox: register in the popup, autofill, save prompt, lock', { timeout: 180000 }, async (t) => {
   if (skip) return t.skip(skip);
   const popup = await browser.newPage();
+  // The popup re-renders after saves and syncs: retry a click that hit an element that was just replaced.
+  const click = async (sel) => {
+    for (let i = 0; ; i++) {
+      try {
+        return await popup.click(sel);
+      } catch (e) {
+        if (i > 10 || !/detached/i.test(e.message)) throw e;
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    }
+  };
   // Firefox doesn't report the load of extension pages over BiDi; the page is there regardless.
   await popup.goto(`moz-extension://${UUID}/popup/popup.html`, { timeout: 5000 }).catch(() => {});
   await popup.waitForSelector('#switch');
-  await popup.click('#switch');
+  await click('#switch');
   for (const [sel, v] of [['#server', SERVER], ['#user', USER], ['#pw', MASTER], ['#pw2', MASTER]]) await popup.type(sel, v);
-  await popup.click('#go');
+  await click('#go');
   await popup.waitForSelector('#q', { timeout: 60000 });
 
-  await popup.click('#ctxs');
-  await popup.click('#add');
+  await click('#ctxs');
+  await click('#add');
   await popup.type('#name', 'Example');
   await popup.type('#urls', siteURL);
-  await popup.click('#save');
-  await popup.click('#back');
-  await popup.click('#add');
+  await click('#save');
+  await new Promise((r) => setTimeout(r, 400)); // saving re-renders the list; don't click the old #back
+  await click('#back');
+  await click('#add');
   await popup.type('#name', 'Example login');
   await popup.type('[data-f=username]', 'me@example.com');
   await popup.type('[data-f=password]', 'hunter2-example');
@@ -81,7 +93,7 @@ test('Firefox: register in the popup, autofill, save prompt, lock', { timeout: 1
     s.value = [...s.options].find((o) => o.text === 'Example').value;
     s.dispatchEvent(new Event('change', { bubbles: true }));
   });
-  await popup.click('#save');
+  await click('#save');
   await popup.waitForSelector('#edit');
 
   const page = await browser.newPage();

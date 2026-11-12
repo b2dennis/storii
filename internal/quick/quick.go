@@ -73,7 +73,7 @@ func Search(v *client.Vault, query string, recent []string) []Result {
 			sub = strings.Join(slices.DeleteFunc([]string{user, strings.Join(names, ", ")}, func(s string) bool { return s == "" }), " · ")
 		}
 		out = append(out, Result{ID: e.ID, Name: e.Name, Type: e.Type, Subtitle: sub, URL: url,
-			Has2FA: e.Type != vault.TypeTOTP && Related2FA(v, e.ID) != "", score: score})
+			Has2FA: e.Type != vault.TypeTOTP && e.Type != vault.TypeCard && Related2FA(v, e.ID) != "", score: score})
 	}
 	slices.SortStableFunc(out, func(a, b Result) int {
 		return cmp.Or(cmp.Compare(b.score, a.score), cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)),
@@ -163,6 +163,13 @@ func Username(it vault.Item) string {
 		return it.Field(vault.FieldAccount)
 	case vault.TypeAPIKey:
 		return it.Field(vault.FieldKeyID)
+	case vault.TypePasskey:
+		return it.Field("user_name")
+	case vault.TypeCard:
+		// Lists show the card's last digits where other secrets show a username.
+		if n := it.Field(vault.FieldNumber); n != "" {
+			return vault.CardMasked(n)
+		}
 	}
 	return ""
 }
@@ -176,6 +183,10 @@ func What(t string) string {
 		return "2FA code"
 	case vault.TypeAPIKey:
 		return "API key"
+	case vault.TypeCard:
+		return "card number"
+	case vault.TypePasskey:
+		return "passkey"
 	}
 	return "note"
 }

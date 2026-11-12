@@ -19,6 +19,7 @@ import android.widget.inline.InlinePresentationSpec
 import androidx.autofill.inline.UiVersions
 import androidx.autofill.inline.v1.InlineSuggestionUi
 import sh.base2.storii.R
+import sh.base2.storii.core.Card
 import sh.base2.storii.core.Entry
 import sh.base2.storii.core.Item
 import sh.base2.storii.core.Totp
@@ -78,6 +79,23 @@ class Responses(private val ctx: Context, private val screen: ParsedScreen, priv
                 val otp = screen.otp ?: return null
                 val code = runCatching { Totp.fromFields(it.fields).code() }.getOrNull() ?: return null
                 dataset(it.name, "2FA code") { setValue(otp, AutofillValue.forText(code)) }
+            }
+            Item.CARD -> {
+                if (!screen.hasCard) return null
+                val (mm, yy) = it.field("expiry").split('/').let { p -> p.getOrElse(0) { "" } to p.getOrElse(1) { "" } }
+                dataset(it.name, Card.masked(it.field("number"))) {
+                    for ((f, id) in screen.card) {
+                        val v = when (f) {
+                            CardField.NUMBER -> Card.digits(it.field("number"))
+                            CardField.NAME -> it.field("cardholder")
+                            CardField.MONTH -> mm
+                            CardField.YEAR -> if (yy.isEmpty()) "" else "20$yy"
+                            CardField.CVC -> it.field("cvc")
+                            CardField.EXPIRY -> it.field("expiry")
+                        }
+                        if (v.isNotEmpty()) setValue(id, AutofillValue.forText(v))
+                    }
+                }
             }
             else -> null
         }

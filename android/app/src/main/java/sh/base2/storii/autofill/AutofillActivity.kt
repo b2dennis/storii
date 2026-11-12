@@ -12,7 +12,14 @@ import android.view.autofill.AutofillManager
 import android.view.inputmethod.InlineSuggestionsRequest
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -77,7 +84,7 @@ class AutofillActivity : FragmentActivity() {
             passwordValue = intent.getStringExtra(EXTRA_PASSWORD_VALUE).orEmpty(),
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) inline = parcel(EXTRA_INLINE)
-        setContent { StoriiTheme { Surface { Content() } } }
+        setContent { StoriiTheme { Content() } }
     }
 
     private inline fun <reified T : android.os.Parcelable> parcel(key: String): T? =
@@ -98,18 +105,19 @@ class AutofillActivity : FragmentActivity() {
         val status by vault.status.collectAsState()
         var picking by remember { mutableStateOf(mode == MODE_PICK) }
         when (val s = status) {
-            VaultStatus.NotSetUp -> FormPage { Text("Open storii and log in first.") }
-            is VaultStatus.Locked -> UnlockPane(this, s.username, s.server, onUnlocked = {
+            VaultStatus.NotSetUp -> Page { FormPage { Text("Open storii and log in first.") } }
+            // Over the app being filled: just the biometric prompt, or a sheet with the master password.
+            is VaultStatus.Locked -> Sheet(onDismiss = { finishWith(null) }) { UnlockPane(this, s.username, s.server, compact = true, onUnlocked = {
                 if (mode == MODE_UNLOCK) {
                     val r = StoriiAutofillService.respond(this, screen, inline)
                     // Nothing stored for this app or site yet: go straight to the search.
-                    if (vault.forTarget(screen.webDomain, StoriiAutofillService.appPackage(screen)).isEmpty()) picking = true
+                    if (!screen.hasCard && vault.forTarget(screen.webDomain, StoriiAutofillService.appPackage(screen)).isEmpty()) picking = true
                     else finishWith(r)
                 }
-            }) { OutlinedButton(onClick = { finishWith(null) }, modifier = Modifier.fillMaxWidth()) { Text("Cancel") } }
+            }) { OutlinedButton(onClick = { finishWith(null) }, modifier = Modifier.fillMaxWidth()) { Text("Cancel") } } }
             is VaultStatus.Unlocked -> when {
-                mode == MODE_SAVE -> SaveScreen()
-                picking -> PickScreen()
+                mode == MODE_SAVE -> Page { SaveScreen() }
+                picking -> Page { PickScreen() }
                 else -> androidx.compose.runtime.LaunchedEffect(Unit) { finishWith(StoriiAutofillService.respond(this@AutofillActivity, screen, inline)) }
             }
         }
@@ -124,6 +132,7 @@ class AutofillActivity : FragmentActivity() {
         val wanted = buildSet {
             if (screen.username != null || screen.password != null) add(Item.PASSWORD)
             if (screen.otp != null) add(Item.TOTP)
+            if (screen.hasCard) add(Item.CARD)
         }
         val all = vault.secrets().filter { it.item.type in wanted }
         val shown = all.filter { e ->
@@ -187,6 +196,22 @@ class AutofillActivity : FragmentActivity() {
                 }
             }, modifier = Modifier.fillMaxWidth()) { Text("Save") }
             OutlinedButton(onClick = { finish() }, modifier = Modifier.fillMaxWidth()) { Text("Not now") }
+        }
+    }
+
+    /** A full screen (the activity's window is translucent). */
+    @Composable
+    private fun Page(content: @Composable () -> Unit) = Surface(Modifier.fillMaxSize()) { content() }
+
+    /** A bottom sheet over the app being filled; tapping outside cancels. */
+    @Composable
+    private fun Sheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.32f))
+            .clickable(interactionSource = null, indication = null, onClick = onDismiss)
+            .imePadding(), contentAlignment = Alignment.BottomCenter) {
+            Surface(Modifier.widthIn(max = 560.dp).fillMaxWidth().navigationBarsPadding()
+                .clickable(interactionSource = null, indication = null) {},
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp), tonalElevation = 2.dp) { content() }
         }
     }
 
