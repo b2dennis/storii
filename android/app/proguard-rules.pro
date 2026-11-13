@@ -8,3 +8,7 @@
 # in release builds only.
 -keep class * implements com.google.firebase.components.ComponentRegistrar { <init>(); }
 -keep class com.google.mlkit.** { *; }
+
+# Credential transfer (import from another app): providerevents finds its Play services implementation by the class
+# name in its manifest meta-data and ships no keep rules, so release builds lost it ("no provider dependencies found").
+-keep class androidx.credentials.providerevents.** { *; }

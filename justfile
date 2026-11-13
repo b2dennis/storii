@@ -1,7 +1,7 @@
 BUILD_DIR := "./build/bin"
 EXE := if os() == "windows" { ".exe" } else { "" }
 # The release version; also set in extension/package.json, android/app/build.gradle.kts and ios/project.yml.
-VERSION := "2.5.0"
+VERSION := "2.5.1"
 
 default: build
 
