@@ -73,7 +73,7 @@ Or run the binary next to any Postgres:
 | `REGISTRATION`               | `open`    | set `closed` once your accounts exist                                              |
 | `SESSIONDAYS`                | `90`      | sessions expire after this many days unused                                        |
 | `ADDRESS`                    | `:9999`   |                                                                                    |
-| `TRUSTPROXY`                 | `false`   | `true` behind a reverse proxy (rate limits by `X-Forwarded-For`)                   |
+| `TRUSTPROXY`                 | `false`   | `true` behind a reverse proxy (rate limits by the last `X-Forwarded-For` entry)    |
 
 Put it behind HTTPS. Migrations run on start. The v2 tables live next to v1's, so you can point v2 at your v1
 database and migrate in place.
@@ -166,6 +166,13 @@ the search from anywhere:
 Copies are kept out of clipboard history and cloud clipboard, and are cleared after 30 s. The vault locks after 10
 minutes without use, and when Windows locks or sleeps. To change the hotkey or the timings, edit
 `%AppData%\storii\tray.json` (from the tray menu) and restart. The tray menu also has "Start with Windows".
+
+On Windows 11 25H2 or later the tray app can also be a passkey provider, so sites in any browser can save and use
+passkeys in storii. Windows only accepts providers with a package identity: run
+`powershell -ExecutionPolicy Bypass -File .\passkeys\install-passkeys.ps1` in the storii folder once. It needs
+makeappx and signtool from the [Windows SDK](https://developer.microsoft.com/windows/downloads/windows-sdk/), makes a
+certificate on your PC and asks for administrator rights to trust it. Then choose "Use for passkeys in Windows" in the
+tray menu and turn storii on in Settings › Accounts › Passkeys › Advanced options. `-Uninstall` removes it again.
 
 ## Development
 

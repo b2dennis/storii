@@ -13,6 +13,7 @@ import kotlinx.serialization.Serializable
 import sh.base2.storii.core.Api
 import sh.base2.storii.core.ApiException
 import sh.base2.storii.core.Crypto
+import sh.base2.storii.core.Card
 import sh.base2.storii.core.Entry
 import sh.base2.storii.core.Item
 import sh.base2.storii.core.Kdf
@@ -201,12 +202,18 @@ class Vault(private val ctx: Context) {
                     }
                 }
             }
-            val rev = Api(s.server, s.token).write(writes)
+            // The server takes at most 2000 writes per request (a big import has more); each chunk is kept once it's stored.
             val map = s.items.toMutableMap()
-            for (w in writes) if (w.delete) map.remove(w.id) else map[w.id] = RemoteItem(w.id, w.data, revision = rev)
-            save(s.copy(items = map))
-            decryptAll()
-            publish()
+            try {
+                for (chunk in writes.chunked(1000)) {
+                    val rev = Api(s.server, s.token).write(chunk)
+                    for (w in chunk) if (w.delete) map.remove(w.id) else map[w.id] = RemoteItem(w.id, w.data, revision = rev)
+                    save(s.copy(items = map.toMap()))
+                }
+            } finally {
+                decryptAll()
+                publish()
+            }
             writes.map { it.id }
         }
     }
@@ -268,6 +275,13 @@ class Vault(private val ctx: Context) {
         val id = put(null, Item(kind = Item.KIND_SECRET, type = Item.PASSWORD, name = name,
             fields = buildMap { if (username.isNotEmpty()) put("username", username); put("password", password) }))
         remember(id, webHost, androidPackage, appLabel)
+    }
+
+    /** A card typed into a form (fields from Card.fromForm), unless storii has that number already. */
+    suspend fun saveCard(fields: Map<String, String>) {
+        val number = fields["number"] ?: return
+        if (secrets().any { it.item.type == Item.CARD && Card.digits(it.item.field("number")) == number }) return
+        put(null, Item(kind = Item.KIND_SECRET, type = Item.CARD, name = Card.defaultName(number), fields = fields))
     }
 
     companion object {

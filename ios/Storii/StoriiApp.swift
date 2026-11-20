@@ -4,6 +4,9 @@ import SwiftUI
 @main
 struct StoriiApp: App {
     @State private var model = AppModel()
+    #if os(iOS)
+    @State private var pendingImport = PendingImport()
+    #endif
     @Environment(\.scenePhase) private var phase
 
     var body: some Scene {
@@ -13,6 +16,14 @@ struct StoriiApp: App {
                 .environment(model)
                 // Hide secrets in the app switcher.
                 .overlay { if phase != .active { Rectangle().fill(.background).overlay(Logo()).ignoresSafeArea() } }
+                // Another app exporting its passwords and passkeys to storii (iOS 26); the import waits for the unlock.
+                .onContinueUserActivity(CredentialExchange.activityType) { pendingImport.token = CredentialExchange.token($0) }
+                .sheet(isPresented: Binding(get: { pendingImport.token != nil && model.isUnlocked },
+                                            set: { if !$0 { pendingImport.token = nil } })) {
+                    if let token = pendingImport.token {
+                        CredentialImportView(token: token) { pendingImport.token = nil }.environment(model)
+                    }
+                }
         }
         .onChange(of: phase) { _, p in
             switch p {

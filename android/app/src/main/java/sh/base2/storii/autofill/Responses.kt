@@ -89,11 +89,15 @@ class Responses(private val ctx: Context, private val screen: ParsedScreen, priv
                             CardField.NUMBER -> Card.digits(it.field("number"))
                             CardField.NAME -> it.field("cardholder")
                             CardField.MONTH -> mm
-                            CardField.YEAR -> if (yy.isEmpty()) "" else "20$yy"
+                            CardField.YEAR -> if (yy.isEmpty()) "" else if (screen.shortYear) yy else "20$yy"
                             CardField.CVC -> it.field("cvc")
                             CardField.EXPIRY -> it.field("expiry")
                         }
-                        if (v.isNotEmpty()) setValue(id, AutofillValue.forText(v))
+                        val options = screen.cardOptions[f]
+                        if (options != null) {
+                            val i = if (f == CardField.MONTH) Card.monthOption(options, mm) else Card.yearOption(options, yy)
+                            if (i >= 0) setValue(id, AutofillValue.forList(i))
+                        } else if (v.isNotEmpty()) setValue(id, AutofillValue.forText(v))
                     }
                 }
             }
@@ -123,11 +127,21 @@ class Responses(private val ctx: Context, private val screen: ParsedScreen, priv
 
     fun saveInfo(): SaveInfo? {
         // Where a new password goes in, that's the one worth saving.
-        val pw = screen.newPasswords.firstOrNull() ?: screen.password ?: return null
+        val pw = screen.newPasswords.firstOrNull() ?: screen.password ?: return cardSaveInfo()
         val type = if (screen.username != null) SaveInfo.SAVE_DATA_TYPE_PASSWORD or SaveInfo.SAVE_DATA_TYPE_USERNAME else SaveInfo.SAVE_DATA_TYPE_PASSWORD
         return SaveInfo.Builder(type, arrayOf(pw)).apply {
             val optional = listOfNotNull(screen.username, screen.password).filter { it != pw }
             if (optional.isNotEmpty()) setOptionalIds(optional.toTypedArray())
+        }.build()
+    }
+
+    /** A checkout: Android offers to save the card once the form is sent (or, in apps, the fields go away). */
+    private fun cardSaveInfo(): SaveInfo? {
+        val number = screen.card[CardField.NUMBER] ?: return null
+        return SaveInfo.Builder(SaveInfo.SAVE_DATA_TYPE_CREDIT_CARD, arrayOf(number)).apply {
+            val optional = screen.card.values.filter { it != number }
+            if (optional.isNotEmpty()) setOptionalIds(optional.toTypedArray())
+            setFlags(SaveInfo.FLAG_SAVE_ON_ALL_VIEWS_INVISIBLE)
         }.build()
     }
 

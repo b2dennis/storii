@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -65,6 +66,7 @@ type app struct {
 	busy       bool // unlocking or logging in
 	relogin    bool // the login was asked for although there is a state (expired session)
 	hotkeyText string
+	passkeyKey string // what Windows was last told about storii's passkeys
 
 	hwnd, icon uintptr
 	taskbarMsg uint32
@@ -107,6 +109,7 @@ func run() error {
 	if err := a.createWindow(); err != nil {
 		return err
 	}
+	startPasskeyServer()
 	a.addTrayIcon()
 	hk, _ := quick.ParseHotkey(a.cfg.Hotkey)
 	a.hotkeyText = a.cfg.Hotkey
@@ -146,6 +149,9 @@ func instanceRunning() bool {
 	_, err := windows.CreateMutex(nil, false, u16(`Local\storii-tray`))
 	if !errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
 		return false
+	}
+	if slices.Contains(os.Args[1:], pluginArg) {
+		return true // Windows wanted the passkey provider, which the running app already serves
 	}
 	if h := call(pFindWindowW, uintptr(unsafe.Pointer(u16(className))), 0); h != 0 {
 		call(pAllowSetForegroundWindow, ^uintptr(0)) // ASFW_ANY
@@ -228,6 +234,7 @@ func (a *app) reopen() {
 		return
 	}
 	a.v = nv
+	a.passkeysChanged()
 }
 
 func (a *app) mode() mode {
@@ -291,6 +298,7 @@ func (a *app) unlock(pw string) {
 			if st != a.st {
 				a.reopen()
 			}
+			a.passkeysChanged()
 			if a.v != nil && len(a.v.Undecryptable) > 0 {
 				a.ui.status = fmt.Sprintf("%d items could not be decrypted.", len(a.v.Undecryptable))
 			}
@@ -334,6 +342,7 @@ func (a *app) login(server, user, pw string) {
 			}
 			a.st, a.v, a.expired, a.relogin, a.lastSync, a.lastUse = st, v, false, false, time.Now(), time.Now()
 			a.saveState()
+			a.passkeysChanged()
 			a.ui.status = ""
 			a.ui.setMode(a.mode())
 			a.updateTip()
@@ -356,6 +365,7 @@ func (a *app) logout() {
 		api.Logout(ctx)
 	}()
 	a.lock()
+	a.forgetPasskeys()
 	a.st, a.expired = nil, false
 	os.Remove(a.statePath)
 	a.stateMod = time.Time{}
@@ -619,6 +629,7 @@ const (
 	cmdSettings
 	cmdLogin
 	cmdLogout
+	cmdPasskeys
 	cmdQuit
 )
 
@@ -658,6 +669,13 @@ func (a *app) menu() {
 	}
 	add(cmdStartup, "Start with Windows", startup)
 	add(cmdSettings, "Edit settings (restart to apply)", 0)
+	if webauthnAvailable() {
+		pk := uintptr(0)
+		if passkeyProviderRegistered() {
+			pk = MF_CHECKED
+		}
+		add(cmdPasskeys, "Use for passkeys in Windows", pk)
+	}
 	if a.st != nil {
 		add(cmdLogout, "Log out ("+a.st.Username+")", 0)
 	}
@@ -689,6 +707,8 @@ func (a *app) menu() {
 		a.show()
 	case cmdLogout:
 		a.logout()
+	case cmdPasskeys:
+		a.togglePasskeyProvider()
 	case cmdQuit:
 		a.hide(false)
 		call(pDestroyWindow, a.hwnd)

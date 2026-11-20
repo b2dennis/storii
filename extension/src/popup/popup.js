@@ -301,8 +301,8 @@ async function renderList(st) {
       <button class="icon" id="settings" title="Settings">⚙</button>
       <button class="icon" id="lock" title="Lock">🔒</button>`) +
     `<div class="pad" style="padding-bottom:0"><input id="q" type="search" placeholder="Search secrets and contexts" value="${esc(ui.query)}"></div>
-    ${pending ? `<div class="banner"><b>${pending.existingId ? 'Update' : 'Save'} the login for ${esc(pending.host)}?</b>
-      <div class="muted small">${esc(pending.username || 'no username')}</div>
+    ${pending ? `<div class="banner"><b>${pending.kind === 'card' ? 'Save this card?' : `${pending.existingId ? 'Update' : 'Save'} the login for ${esc(pending.host)}?`}</b>
+      <div class="muted small">${pending.kind === 'card' ? `•••• ${esc(pending.card.number.slice(-4))}` : esc(pending.username || 'no username')}</div>
       <div class="row" style="margin-top:8px"><button id="pdiscard">Not now</button><button class="primary" id="psave">Save</button></div></div>` : ''}
     <div id="lists"></div>`;
   const $ = (id) => document.getElementById(id);

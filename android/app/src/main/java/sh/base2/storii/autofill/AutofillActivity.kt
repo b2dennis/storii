@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.launch
 import sh.base2.storii.BuildConfig
+import sh.base2.storii.core.Card
 import sh.base2.storii.core.Entry
 import sh.base2.storii.core.Item
 import sh.base2.storii.data.VaultStatus
@@ -86,6 +87,12 @@ class AutofillActivity : FragmentActivity() {
                 .associate { (id, f) -> CardField.valueOf(f) to id },
             newPasswords = parcels(EXTRA_NEW_PASSWORDS),
             newPasswordValue = intent.getStringExtra(EXTRA_NEW_PASSWORD_VALUE).orEmpty(),
+            cardValues = intent.getStringArrayListExtra(EXTRA_CARD_FIELDS).orEmpty()
+                .zip(intent.getStringArrayListExtra(EXTRA_CARD_VALUES).orEmpty())
+                .associate { (f, v) -> CardField.valueOf(f) to v },
+            cardOptions = CardField.entries.mapNotNull { f -> intent.getStringArrayListExtra(EXTRA_CARD_OPTIONS + f.name)?.let { f to it.toList() } }
+                .toMap(),
+            shortYear = intent.getBooleanExtra(EXTRA_SHORT_YEAR, false),
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) inline = parcel(EXTRA_INLINE)
         setContent { StoriiTheme { Content() } }
@@ -187,15 +194,21 @@ class AutofillActivity : FragmentActivity() {
     private fun SaveScreen() {
         val scope = rememberCoroutineScope()
         var error by remember { mutableStateOf<String?>(null) }
+        val card = if (screen.savedPassword.isEmpty()) screen.submittedCard else null
         FormPage {
             Logo()
-            Text("Save this login for $target?", style = MaterialTheme.typography.titleLarge)
-            if (screen.usernameValue.isNotEmpty()) Text("as ${screen.usernameValue}")
+            if (card != null) {
+                Text("Save this card in storii?", style = MaterialTheme.typography.titleLarge)
+                Text("${Card.displayBrand(card.getValue("number"))} ${Card.masked(card.getValue("number"))}".trim())
+            } else {
+                Text("Save this login for $target?", style = MaterialTheme.typography.titleLarge)
+                if (screen.usernameValue.isNotEmpty()) Text("as ${screen.usernameValue}")
+            }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Button(onClick = {
                 scope.launch {
                     try {
-                        vault.saveLogin(screen.webDomain, StoriiAutofillService.appPackage(screen),
+                        if (card != null) vault.saveCard(card) else vault.saveLogin(screen.webDomain, StoriiAutofillService.appPackage(screen),
                             StoriiAutofillService.appLabel(this@AutofillActivity, screen.packageName), screen.usernameValue, screen.savedPassword,
                             changed = screen.newPasswordValue.isNotEmpty(), current = screen.passwordValue)
                         finish()
@@ -241,6 +254,9 @@ class AutofillActivity : FragmentActivity() {
         private const val EXTRA_CARD_FIELDS = "cardFields"
         private const val EXTRA_NEW_PASSWORDS = "newPasswords"
         private const val EXTRA_NEW_PASSWORD_VALUE = "newPasswordValue"
+        private const val EXTRA_CARD_VALUES = "cardValues"
+        private const val EXTRA_CARD_OPTIONS = "cardOptions."
+        private const val EXTRA_SHORT_YEAR = "shortYear"
         private var requestCode = 1
 
         fun sender(ctx: Context, mode: String, screen: ParsedScreen, inline: InlineSuggestionsRequest?): IntentSender {
@@ -254,9 +270,13 @@ class AutofillActivity : FragmentActivity() {
                 .putParcelableArrayListExtra(EXTRA_CARD_IDS, ArrayList(screen.card.values))
                 .putStringArrayListExtra(EXTRA_CARD_FIELDS, ArrayList(screen.card.keys.map { it.name }))
                 .putParcelableArrayListExtra(EXTRA_NEW_PASSWORDS, ArrayList(screen.newPasswords))
+                .putExtra(EXTRA_SHORT_YEAR, screen.shortYear)
+            // Dropdown fields are filled by option index, so the fill after unlocking needs their options too.
+            for ((f, options) in screen.cardOptions) i.putStringArrayListExtra(EXTRA_CARD_OPTIONS + f.name, ArrayList(options))
             if (mode == MODE_SAVE) {
                 i.putExtra(EXTRA_USERNAME_VALUE, screen.usernameValue).putExtra(EXTRA_PASSWORD_VALUE, screen.passwordValue)
                     .putExtra(EXTRA_NEW_PASSWORD_VALUE, screen.newPasswordValue)
+                    .putStringArrayListExtra(EXTRA_CARD_VALUES, ArrayList(screen.card.keys.map { screen.cardValues[it].orEmpty() }))
             }
             if (inline != null) i.putExtra(EXTRA_INLINE, inline)
             // Each request needs its own PendingIntent, or Android reuses the extras of an older one.

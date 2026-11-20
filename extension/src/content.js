@@ -395,16 +395,32 @@
 
   // Remember submitted logins so the background can offer to save them.
 
-  // A card typed into a checkout form: the background offers to save it if it's new.
-  function captureCard(scope) {
+  // Cards typed into a checkout: each frame tells the background what its card fields hold (the number, expiry and
+  // CVC are often in separate payment-provider iframes), and the background offers to save the card once something
+  // is submitted or paid in any frame of the tab.
+  function cardFields(scope) {
     const card = {};
     for (const el of scope.querySelectorAll('input, select')) {
       const r = cardRole(el);
       if (r && el.value && !(r in card)) card[r] = el.value;
     }
-    if (!card.number) return;
-    const expiry = card.exp || (card.month && card.year ? `${card.month}/${String(card.year).slice(-2)}` : '');
-    send({ type: 'cardSubmitted', card: { number: card.number, cardholder: card.name || '', expiry, cvc: card.cvc || '' } }).catch(() => {});
+    return card;
+  }
+  let cardTyped = false, draftTimer = 0;
+  const onCardInput = (e) => {
+    if (!cardRole(e.target)) return;
+    cardTyped = true;
+    clearTimeout(draftTimer);
+    // Shortly after typing stops: a blur into another frame doesn't always fire 'change' in time.
+    draftTimer = setTimeout(() => send({ type: 'cardDraft', card: cardFields(document) }).catch(() => {}), e.type === 'change' ? 0 : 150);
+  };
+  document.addEventListener('input', onCardInput, true);
+  document.addEventListener('change', onCardInput, true);
+
+  function captureCard(scope) {
+    const card = cardFields(scope);
+    // Nothing typed in this frame: still a signal for the card typed in the tab's other frames.
+    if (card.number || cardTyped || window.top === window) send({ type: 'cardSubmitted', card }).catch(() => {});
   }
 
   function captureSubmit(scope) {
@@ -420,9 +436,10 @@
     send({ type: 'submitted', username: user?.value || '', password: pw.value }).catch(() => {});
   }
   document.addEventListener('submit', (e) => captureSubmit(e.target), true);
+  const SUBMIT_RE = /log ?in|sign ?in|continue|next|pay|buy|order|checkout|purchase|confirm|subscribe|complete|save|add|submit|place|zahlen|kaufen|bestell|weiter|speichern|hinzuf(ü|u)gen|best(ä|a)tigen|abschlie(ss|ß)en|abonnieren|anmelden|payer|commander|valider|confirmer|continuer|enregistrer|ajouter|connexion/i;
   document.addEventListener('click', (e) => {
-    const b = e.target.closest?.('button, input[type=submit]');
-    if (b && (b.type === 'submit' || /log ?in|sign ?in|continue|next|pay|buy|order|checkout|bezahlen|kaufen|bestellen|payer|commander/i.test(b.textContent || b.value || ''))) {
+    const b = e.target.closest?.('button, input[type=submit], input[type=button], [role=button]');
+    if (b && (b.type === 'submit' || SUBMIT_RE.test(b.textContent || b.value || b.getAttribute('aria-label') || ''))) {
       captureSubmit(b.form || document);
     }
   }, true);
@@ -430,18 +447,19 @@
     if (e.key === 'Enter' && e.target instanceof HTMLInputElement && e.target.type === 'password') captureSubmit(e.target.form || document);
   }, true);
 
-  // The save bar, shown on the page after a login that isn't in the vault yet.
+  // The save bar, shown on the page after a login or card that isn't in the vault yet.
 
+  let saveBar = null;
   async function maybeOfferSave() {
-    if (window.top !== window) return;
+    if (window.top !== window || saveBar?.isConnected) return;
     let p;
     try {
       p = await send({ type: 'pendingSave' });
     } catch {
       return;
     }
-    if (!p) return;
-    const bar = document.createElement('storii-save');
+    if (!p || saveBar?.isConnected) return;
+    const bar = saveBar = document.createElement('storii-save');
     const sh = bar.attachShadow({ mode: 'closed' });
     sh.innerHTML = `<style>
       .bar { position: fixed; top: 12px; right: 12px; z-index: 2147483647; background: #fff; color: #1d1d1f; border-radius: 12px;
@@ -460,10 +478,33 @@
       sh.querySelector('b').textContent = p.update ? `Update the password for ${p.host}?` : `Save this login for ${p.host}?`;
       sh.querySelector('.s').textContent = p.username ? `as ${p.username}, in storii` : 'in storii';
     }
-    sh.querySelector('.save').onclick = () => send({ type: 'confirmSave', save: true }).finally(() => bar.remove());
+    const save = () => send({ type: 'confirmSave', save: true }).catch((e) => console.warn('storii:', e.message)).finally(() => bar.remove());
+    sh.querySelector('.save').onclick = p.locked ? () => unlockInBar(sh, bar, save) : save;
+    if (p.locked) sh.querySelector('.save').textContent = 'Unlock and save';
     sh.querySelector('.no').onclick = () => send({ type: 'confirmSave', save: false }).finally(() => bar.remove());
     document.documentElement.append(bar);
   }
+  // A locked vault: the bar turns into storii's unlock frame (as the picker does), then saves.
+  function unlockInBar(sh, bar, save) {
+    const box = sh.querySelector('.bar');
+    box.replaceChildren();
+    box.style.padding = '0';
+    box.style.overflow = 'hidden';
+    const frame = document.createElement('iframe');
+    frame.src = chrome.runtime.getURL('unlock/unlock.html');
+    frame.allow = 'publickey-credentials-get *';
+    frame.style.cssText = 'display:block;border:0;width:300px;height:132px;color-scheme:normal';
+    box.append(frame);
+    const onMessage = (e) => {
+      if (e.source !== frame.contentWindow || !e.data?.storii) return;
+      removeEventListener('message', onMessage);
+      if (e.data.storii === 'unlocked') save();
+      else bar.remove();
+    };
+    addEventListener('message', onMessage);
+    setTimeout(() => frame.focus(), 0);
+  }
+
   // As early as the page has a body: pages that redirect right after a login often don't wait for 'load'.
   if (document.readyState !== 'loading') maybeOfferSave();
   else document.addEventListener('DOMContentLoaded', maybeOfferSave, { once: true });
@@ -472,6 +513,7 @@
 
   chrome.runtime.onMessage.addListener((msg) => {
     const active = document.activeElement instanceof HTMLInputElement ? document.activeElement : null;
+    if (msg.type === 'showSave') return void maybeOfferSave();
     if (msg.type === 'fillCard') {
       if (mayTakeCard(msg.topHost)) fillCard(msg.card);
       return;

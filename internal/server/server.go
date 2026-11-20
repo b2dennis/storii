@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"golang.org/x/time/rate"
@@ -144,9 +145,15 @@ func (s *Server) internal(w http.ResponseWriter, r *http.Request, err error) {
 
 func (s *Server) clientIP(r *http.Request) string {
 	if s.cfg.TrustProxy {
-		if f := r.Header.Get("X-Forwarded-For"); f != "" {
-			ip, _, _ := strings.Cut(f, ",")
-			return strings.TrimSpace(ip)
+		// The proxy appends the address it saw, so the last entry is the one to trust; earlier ones come from the client.
+		if f := r.Header.Values("X-Forwarded-For"); len(f) > 0 {
+			last := f[len(f)-1]
+			if i := strings.LastIndex(last, ","); i >= 0 {
+				last = last[i+1:]
+			}
+			if ip := strings.TrimSpace(last); ip != "" {
+				return ip
+			}
 		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
@@ -211,13 +218,21 @@ func token(r *http.Request) []byte    { return r.Context().Value(ctxToken).([]by
 func (s *Server) newSession(ctx context.Context, accountID int64, device string) (string, error) {
 	tok := make([]byte, 32)
 	rand.Read(tok)
-	if len(device) > maxDeviceName {
-		device = device[:maxDeviceName]
-	}
+	device = deviceName(device)
 	if err := s.db.CreateSession(ctx, accountID, tok, device, s.cfg.SessionTTL); err != nil {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(tok), nil
+}
+
+// deviceName cuts a device name to maxDeviceName bytes without splitting a character: Postgres refuses invalid UTF-8.
+func deviceName(d string) string {
+	d = strings.ToValidUTF8(d, "")
+	for len(d) > maxDeviceName {
+		_, n := utf8.DecodeLastRuneInString(d)
+		d = d[:len(d)-n]
+	}
+	return d
 }
 
 var usernameRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.@-]{2,63}$`)

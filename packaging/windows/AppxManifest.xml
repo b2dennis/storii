@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sparse package that gives storii-tray.exe the package identity Windows wants from a passkey provider. It holds no
+     files of its own: install-passkeys.ps1 fills in the version, packs and signs it, and registers it with the storii
+     folder as its external location. The publisher, name and application id match the msix element in the exe's
+     manifest (assets/make_winres.py), and the CLSID matches clsidStorii in cmd/storii-tray/webauthn_windows.go. -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap10 com rescap">
+  <Identity Name="storii" Publisher="CN=storii" Version="VERSION" ProcessorArchitecture="neutral"/>
+  <Properties>
+    <DisplayName>storii</DisplayName>
+    <PublisherDisplayName>storii</PublisherDisplayName>
+    <Logo>passkeys\Assets\StoreLogo.png</Logo>
+    <uap10:AllowExternalContent>true</uap10:AllowExternalContent>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22635.4515" MaxVersionTested="10.0.26200.0"/>
+  </Dependencies>
+  <Resources>
+    <Resource Language="en-us"/>
+  </Resources>
+  <Applications>
+    <Application Id="storii" Executable="storii-tray.exe" uap10:TrustLevel="mediumIL" uap10:RuntimeBehavior="win32App">
+      <uap:VisualElements DisplayName="storii" Description="storii password manager" BackgroundColor="transparent"
+        Square150x150Logo="passkeys\Assets\Square150x150Logo.png" Square44x44Logo="passkeys\Assets\Square44x44Logo.png" AppListEntry="none"/>
+      <Extensions>
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:ExeServer Executable="storii-tray.exe" Arguments="-PluginActivated" DisplayName="storii passkeys">
+              <com:Class Id="ca1b226c-0328-4bb2-acc9-127e5e4bec38" DisplayName="storii passkeys"/>
+            </com:ExeServer>
+          </com:ComServer>
+        </com:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust"/>
+    <rescap:Capability Name="unvirtualizedResources"/>
+  </Capabilities>
+</Package>

@@ -164,7 +164,7 @@ func TestVaultLifecycle(t *testing.T) {
 	if err := v.Delete(ctx, ci); err != nil {
 		t.Fatal(err)
 	}
-	if err := v.Delete(ctx, pw); err != nil {
+	if err := v.Delete(ctx, pw, pw); err != nil { // the same id twice is one delete
 		t.Fatal(err)
 	}
 	before := st2.Revision

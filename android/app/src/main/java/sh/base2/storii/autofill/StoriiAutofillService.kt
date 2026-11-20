@@ -35,11 +35,18 @@ class StoriiAutofillService : AutofillService() {
 
     override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
         val screen = Parser.parse(request.fillContexts.last().structure)
-        if (screen.savedPassword.isEmpty() || screen.packageName == packageName || !vault.isSetUp) {
+        val card = if (screen.savedPassword.isEmpty()) screen.submittedCard else null
+        if ((screen.savedPassword.isEmpty() && card == null) || screen.packageName == packageName || !vault.isSetUp) {
             callback.onSuccess()
             return
         }
-        if (vault.isUnlocked) {
+        if (card != null && vault.isUnlocked) {
+            val vault = vault
+            (application as StoriiApp).scope.launch {
+                runCatching { vault.saveCard(card) }.onFailure { Log.w("storii", "save failed", it) }
+            }
+            callback.onSuccess()
+        } else if (vault.isUnlocked) {
             val label = appLabel(this, screen.packageName)
             val vault = vault
             (application as StoriiApp).scope.launch {

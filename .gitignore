@@ -6,6 +6,7 @@ ios/StoriiCore/.build/
 ios/StoriiCore/.swiftpm/
 ios/*.xcodeproj/
 ios/AutoFill/Info.plist
+ios/Storii/Info.plist
 ios/Mac/Info.plist
 ios/Mac/MacAutoFill/
 ios-shots/

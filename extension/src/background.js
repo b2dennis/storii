@@ -221,6 +221,8 @@ async function logout() {
 }
 
 // Writes go to the server first, then into the local copy.
+const WRITE_CHUNK = 1000;
+
 async function write(changes) {
   const key = await getVaultKey();
   const state = await getState();
@@ -238,12 +240,16 @@ async function write(changes) {
     plain[id] = item;
     writes.push({ id, data: await encryptItem(key, id, item) });
   }
-  const { revision } = await api(state, 'POST', '/api/v2/items', { writes });
-  for (const w of writes) {
-    if (w.delete) delete state.items[w.id];
-    else state.items[w.id] = { id: w.id, data: w.data, revision };
+  // The server takes at most 2000 writes per request (a big import has more); each chunk is kept once it's stored.
+  for (let i = 0; i < writes.length; i += WRITE_CHUNK) {
+    const chunk = writes.slice(i, i + WRITE_CHUNK);
+    const { revision } = await api(state, 'POST', '/api/v2/items', { writes: chunk });
+    for (const w of chunk) {
+      if (w.delete) delete state.items[w.id];
+      else state.items[w.id] = { id: w.id, data: w.data, revision };
+    }
+    await setState(state);
   }
-  await setState(state);
   cache = null;
   await touch();
   return writes.map((w) => w.id);
@@ -282,45 +288,76 @@ function isExtensionPage(sender) {
     (sender.id === chrome.runtime.id && /^(chrome|moz)-extension:\/\/[^/]+\/unlock\/unlock\.html/.test(sender.url || ''));
 }
 
-// Logins submitted in a tab that aren't in the vault yet, offered for saving on the next page.
-// Kept in storage.session (memory only) because the worker can be stopped between two page loads.
-const pendingSaves = {
-  async all() {
-    return (await chrome.storage.session.get('pending')).pending || {};
-  },
-  async get(tabId) {
-    return (await this.all())[tabId] || null;
-  },
-  async set(tabId, value) {
-    const all = await this.all();
-    all[tabId] = value;
-    await chrome.storage.session.set({ pending: all });
-  },
-  async delete(tabId) {
-    const all = await this.all();
-    delete all[tabId];
-    await chrome.storage.session.set({ pending: all });
-  },
-};
+// Per-tab state kept in storage.session (memory only) because the worker can be stopped between two page loads.
+// Every change is a read-modify-write of one storage key, and several frames of a tab send theirs at once: changes
+// run one after the other, or one would overwrite another (a card's CVC typed in its own iframe got lost).
+function tabStore(key) {
+  let queue = Promise.resolve();
+  const all = async () => (await chrome.storage.session.get(key))[key] || {};
+  return {
+    async get(tabId) {
+      await queue;
+      return (await all())[tabId] || null;
+    },
+    // fn gets the tab's value (or null) and returns the new one; undefined deletes it.
+    update(tabId, fn) {
+      const run = queue.then(async () => {
+        const m = await all();
+        const v = await fn(m[tabId] || null);
+        if (v === undefined) {
+          if (!(tabId in m)) return v;
+          delete m[tabId];
+        } else {
+          m[tabId] = v;
+        }
+        await chrome.storage.session.set({ [key]: m });
+        return v;
+      });
+      queue = run.catch(() => {});
+      return run;
+    },
+    set(tabId, value) {
+      return this.update(tabId, () => value);
+    },
+    delete(tabId) {
+      return this.update(tabId, () => undefined);
+    },
+  };
+}
+
+// Logins and cards submitted in a tab that aren't in the vault yet, offered for saving.
+const pendingSaves = tabStore('pending');
+// Card fields typed in a tab so far, merged across its frames (payment providers often put the number, expiry and
+// CVC each in their own iframe, while the Pay button is on the page itself).
+const cardDrafts = tabStore('cardDrafts');
+
+// What saving this login would do: null when the vault has it already, else { existingId } (null: a new login).
+// Without the vault (locked) it can't tell; savePending asks again once it's unlocked.
+async function loginPlan(host, username, password) {
+  const logins = (await secretsForHost(host)).filter((s) => s.type === 'password');
+  let existingId = null;
+  // A new password without a username (reset and change-password forms) replaces the site's only login.
+  if (!username && logins.length === 1) existingId = logins[0].id;
+  for (const s of logins) {
+    if (s.fields?.password === password && (!username || s.fields?.username === username)) return null; // known
+    if (username && s.fields?.username === username) existingId = s.id;
+    // A login without a username (e.g. migrated from v1) used with this password: add the username to it.
+    else if (username && !existingId && !s.fields?.username && s.fields?.password === password) existingId = s.id;
+  }
+  return { existingId };
+}
 
 async function noteSubmission(sender, { username, password }) {
   const host = senderHost(sender);
   if (!host || !password || !sender.tab) return;
-  const all = await items();
+  const checked = !!(await items());
   let existingId = null;
-  if (all) {
-    const logins = (await secretsForHost(host)).filter((s) => s.type === 'password');
-    // A new password without a username (reset and change-password forms) replaces the site's only login.
-    if (!username && logins.length === 1) existingId = logins[0].id;
-    for (const s of await secretsForHost(host)) {
-      if (s.type !== 'password') continue;
-      if (s.fields?.password === password && (!username || s.fields?.username === username)) return; // known
-      if (username && s.fields?.username === username) existingId = s.id;
-      // A login without a username (e.g. migrated from v1) used with this password: add the username to it.
-      else if (username && !existingId && !s.fields?.username && s.fields?.password === password) existingId = s.id;
-    }
+  if (checked) {
+    const plan = await loginPlan(host, username, password);
+    if (!plan) return;
+    existingId = plan.existingId;
   }
-  await pendingSaves.set(sender.tab.id, { host, username, password, existingId, at: Date.now() });
+  await pendingSaves.set(sender.tab.id, { host, username, password, existingId, checked, at: Date.now() });
 }
 
 // The last two labels of a host (three under short second-level domains like co.uk): close enough to a registrable
@@ -341,14 +378,40 @@ async function pendingFor(tabId) {
   return p || null;
 }
 
-// A card typed into a checkout that storii doesn't have yet: offered for saving like a login.
-async function noteCard(sender, card) {
-  if (!sender.tab || !cardValid(card?.number)) return;
-  const number = cardDigits(card.number);
+const haveCard = (all, number) => [...all.values()].some((it) => it.type === 'card' && cardDigits(it.fields?.number) === number);
+
+// Adds what a frame has of a card (number, name, month, year, exp, cvc) to the tab's draft.
+function mergeCardDraft(tabId, part) {
+  return cardDrafts.update(tabId, (d) => {
+    d ||= {};
+    for (const k of ['number', 'name', 'month', 'year', 'exp', 'cvc']) {
+      const v = String(part?.[k] ?? '').trim();
+      if (v) d[k] = v;
+    }
+    d.at = Date.now();
+    return d;
+  });
+}
+
+// The tab's card draft becomes a pending save if it holds a card storii doesn't have yet. Returns whether it did.
+async function commitCard(tab) {
+  let d = null;
+  await cardDrafts.update(tab.id, (draft) => {
+    if (!draft) return undefined;
+    const stale = Date.now() - draft.at > 10 * 60 * 1000;
+    // Not a whole card yet (e.g. "Next" before the payment step): keep it for later.
+    if (!stale && !cardValid(draft.number)) return draft;
+    if (!stale) d = draft;
+    return undefined; // taken, or too old
+  });
+  if (!d) return false;
+  const number = cardDigits(d.number);
   const all = await items();
-  if (all && [...all.values()].some((it) => it.type === 'card' && cardDigits(it.fields?.number) === number)) return;
-  await pendingSaves.set(sender.tab.id, { kind: 'card', host: senderHost(sender), at: Date.now(),
-    card: { number, cardholder: (card.cardholder || '').trim(), expiry: normalizeExpiry(card.expiry || ''), cvc: (card.cvc || '').trim() } });
+  if (all && haveCard(all, number)) return false;
+  const expiry = normalizeExpiry(d.exp || (d.month && d.year ? `${d.month}/${String(d.year).slice(-2)}` : ''));
+  await pendingSaves.set(tab.id, { kind: 'card', host: hostOf(tab.url || ''), at: Date.now(), checked: !!all,
+    card: { number, cardholder: d.name || '', expiry, cvc: d.cvc || '' } });
+  return true;
 }
 
 async function savePending(tabId) {
@@ -358,13 +421,19 @@ async function savePending(tabId) {
   const all = await items();
   if (!all) throw new Error('locked');
   if (p.kind === 'card') {
+    if (haveCard(all, p.card.number)) return null; // noted while locked, and it was there after all
     const brand = cardBrand(p.card.number);
     const fields = Object.fromEntries(Object.entries(p.card).filter(([, v]) => v));
     const name = `${brand ? brand[0].toUpperCase() + brand.slice(1) : 'Card'} ${p.card.number.slice(-4)}`;
     return (await write([{ id: undefined, item: { kind: 'secret', type: 'card', name, fields } }]))[0];
   }
-  if (p.existingId) {
-    const s = all.get(p.existingId);
+  if (!p.checked) {
+    const plan = await loginPlan(p.host, p.username, p.password);
+    if (!plan) return null;
+    p.existingId = plan.existingId;
+  }
+  const s = p.existingId && all.get(p.existingId);
+  if (s) {
     const fields = { ...s.fields, password: p.password };
     if (p.username) fields.username = p.username;
     await write([{ id: p.existingId, item: { ...s, fields } }]);
@@ -504,22 +573,35 @@ const handlers = {
     if (s.type === 'totp') return { code: await totpCode(totpFromFields(s.fields)) };
     return { username: s.fields?.username || '', password: s.fields?.password || '' };
   },
+  // A card field changed in some frame of the tab.
+  async cardDraft({ card }, sender) {
+    if (sender.tab) await mergeCardDraft(sender.tab.id, card);
+  },
+  // Something in the tab was submitted or a pay/save button clicked: offer the card typed so far, right away (many
+  // checkouts never load a new page) and again on the next page if it does.
   async cardSubmitted({ card }, sender) {
-    await noteCard(sender, card);
+    if (!sender.tab) return;
+    await mergeCardDraft(sender.tab.id, card);
+    // The other frames' last change events may still be on their way.
+    await new Promise((r) => setTimeout(r, 300));
+    if (await commitCard(sender.tab)) chrome.tabs.sendMessage(sender.tab.id, { type: 'showSave' }, { frameId: 0 }).catch(() => {});
   },
   async submitted(msg, sender) {
     await noteSubmission(sender, msg);
   },
   async pendingSave(_msg, sender) {
-    if (!sender.tab || !(await getVaultKey())) return null;
+    if (!sender.tab) return null;
+    // A card typed on the previous page, which then went on without a click storii recognised.
+    if (!(await pendingSaves.get(sender.tab.id))) await commitCard(sender.tab);
     const p = await pendingFor(sender.tab.id);
     if (!p) return null;
+    const locked = !(await getVaultKey());
     // Pages often redirect right after a login, also to another host (login.example.com → app.example.com, SSO):
     // offer it on the page the tab ends up on. Same site for 5 minutes, any site for the first minute.
     const here = senderHost(sender);
     if (here !== p.host && siteOf(here) !== siteOf(p.host) && Date.now() - p.at > 60 * 1000) return null;
-    if (p.kind === 'card') return { host: p.host, card: { brand: cardBrand(p.card.number), last4: p.card.number.slice(-4) } };
-    return { host: p.host, username: p.username, update: !!p.existingId };
+    if (p.kind === 'card') return { host: p.host, locked, card: { brand: cardBrand(p.card.number), last4: p.card.number.slice(-4) } };
+    return { host: p.host, locked, username: p.username, update: !!p.existingId };
   },
   async confirmSave({ save }, sender) {
     if (!save) return void (await pendingSaves.delete(sender.tab.id));
@@ -619,4 +701,7 @@ chrome.commands?.onCommand.addListener(async (command, tab) => {
 
 chrome.runtime.onStartup?.addListener(updateBadge);
 chrome.runtime.onInstalled.addListener(updateBadge);
-chrome.tabs.onRemoved.addListener((tabId) => pendingSaves.delete(tabId));
+chrome.tabs.onRemoved.addListener((tabId) => {
+  pendingSaves.delete(tabId);
+  cardDrafts.delete(tabId);
+});

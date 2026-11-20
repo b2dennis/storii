@@ -46,6 +46,54 @@ object Card {
         return "%02d/%s".format(mi, y)
     }
 
+    /**
+     * A card typed into a form, as a card item's fields (number, cardholder, expiry, cvc), or null when the number
+     * isn't a valid card number. The expiry comes from one field ("MM/YY") or a month and a year field.
+     */
+    fun fromForm(number: String, cardholder: String = "", month: String = "", year: String = "", expiry: String = "", cvc: String = ""): Map<String, String>? {
+        if (!valid(number)) return null
+        val exp = normalizeExpiry(expiry.ifBlank { if (month.isNotBlank() && year.isNotBlank()) "${month.trim()}/${year.trim().takeLast(2)}" else "" })
+        return buildMap {
+            put("number", digits(number))
+            if (cardholder.isNotBlank()) put("cardholder", cardholder.trim())
+            if (exp.isNotEmpty()) put("expiry", exp)
+            if (cvc.isNotBlank()) put("cvc", cvc.trim())
+        }
+    }
+
+    // Month names as they start in English, German and French ("Jan", "März", "juil.").
+    private val MONTHS = listOf(
+        listOf("jan"), listOf("feb", "fév", "fev"), listOf("mar", "mär", "mrz"), listOf("apr", "avr"), listOf("may", "mai"),
+        listOf("jun", "juin"), listOf("jul", "juil"), listOf("aug", "aoû", "aou"), listOf("sep"), listOf("oct", "okt"),
+        listOf("nov"), listOf("dec", "dez", "déc"),
+    )
+
+    /** The month a dropdown option means ("01", "1 - January", "Jan", "März") as "MM", or "". */
+    fun monthOf(option: String): String {
+        val s = option.trim().lowercase()
+        Regex("^(\\d{1,2})(?!\\d)").find(s)?.let { m ->
+            val n = m.groupValues[1].toInt()
+            return if (n in 1..12) "%02d".format(n) else ""
+        }
+        val i = MONTHS.indexOfFirst { names -> names.any { s.startsWith(it) } }
+        return if (i < 0) "" else "%02d".format(i + 1)
+    }
+
+    /** The year a dropdown option means ("2029", "29") as "YY", or "". */
+    fun yearOf(option: String): String {
+        val m = Regex("(?<!\\d)(\\d{4}|\\d{2})(?!\\d)").find(option.trim()) ?: return ""
+        return m.groupValues[1].takeLast(2)
+    }
+
+    /** Which option of a month dropdown is month mm ("MM"); -1 when none is. */
+    fun monthOption(options: List<String>, mm: String) = if (mm.isEmpty()) -1 else options.indexOfFirst { monthOf(it) == mm }
+
+    /** Which option of a year dropdown is year yy ("YY"); -1 when none is. */
+    fun yearOption(options: List<String>, yy: String) = if (yy.isEmpty()) -1 else options.indexOfFirst { yearOf(it) == yy }
+
+    /** "Visa 4242": the name a saved card gets. */
+    fun defaultName(number: String) = "${displayBrand(number).ifEmpty { "Card" }} ${digits(number).takeLast(4)}"
+
     fun displayBrand(number: String) = brand(number).let {
         when (it) { "amex" -> "American Express"; "jcb" -> "JCB"; "unionpay" -> "UnionPay"; else -> it.replaceFirstChar(Char::uppercase) }
     }

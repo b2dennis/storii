@@ -77,7 +77,11 @@ tried with a real Bitwarden export). Android credential transfer import DONE 202
 Import › "Import from another app" calls androidx.credentials.providerevents (1.0.0-beta01, + play-services) and parses
 the CXF 1.0 JSON (core/CxfImport.kt: logins, passkeys, 2FA codes, cards, notes; tolerates a CXP payload envelope);
 shared cases testdata/import/cxf*.json; unit-tested, not tried on a device or with Google Password Manager. storii is
-not an exporter (yet). Open: iOS 26 ASCredentialImportManager, Windows (5).
+not an exporter (yet). iOS 26 import DONE 2026-11-13 (uncommitted): StoriiCore Import.swift + CxfImport.swift (Swift
+port, same shared cases, `swift test` passes on Linux); app: CredentialExchange.swift handles the
+ASCredentialExchangeActivity (NSUserActivityTypes in project.yml), ASCredentialImportManager → Codable → CXF JSON, sheet
+once unlocked; AutoFill extension declares SupportsCredentialExchange / versions ["1.0"]. App layer NOT compiled yet
+(Mac asleep): run ios/mac-build, then try exporting from Passwords on an iOS 26 device. Windows (5) built, untested (see 5).
 Done: `passkey` type everywhere (Go/CLI/tray/Android/iOS list it read-only; Android edit keeps its fields), extension
 creates/uses passkeys via a MAIN-world navigator.credentials hook + approval window (fallback to the browser's own
 dialog; conditional mediation left to the browser). Open: Android Credential Manager provider (step 2), iOS (step 4),
@@ -124,6 +128,23 @@ only through the FIDO Credential Exchange flow (see Import).
 
 ## 5. Windows tray
 - Windows 11 passkey plugin API (WebAuthn plugin authenticator, 24H2+/25H2). Later; low priority.
+- BUILT 2026-11-14 (uncommitted), compiles for windows/amd64+arm64, UNTESTED on Windows: self-signed sparse package
+  (packaging/windows: AppxManifest.xml + install-passkeys.ps1, needs the Windows SDK for makeappx/signtool; shipped as
+  passkeys/ in the release zip); msix identity element in the exe manifest (make_winres.py); internal/passkey Go
+  signing + VerifyCNG (tested); cmd/storii-tray/webauthn_windows.go (bindings) + passkey_windows.go (COM server in its
+  own MTA thread, Make/GetAssertion, cancel, lock status, UV with a MessageBox fallback, picker menu, saves via a
+  vault copy, credential cache via AddCredentials). Tray menu "Use for passkeys in Windows" adds/removes it.
+  Requests with a bad Windows signature are REJECTED (the sample only logs): if every request fails with
+  E_ACCESSDENIED, check VerifyCNG's blob/PSS assumptions first. Struct layouts are hand-translated from
+  webauthnplugin.h/webauthn.h: the next suspect after that.
+- (was) BLOCKED on packaging (2026-11-13): WebAuthNPluginAddAuthenticator from an unpackaged exe fails with 0x80073D54
+  APPMODEL_ERROR_NO_PACKAGE (tested on 25H2 26200 by another project; Bitwarden only registers from its APPX build).
+  storii-tray needs package identity: a sparse package (manifest-only MSIX with windows.comServer, registered by the
+  exe, pointing at its folder) signed with a trusted cert (code-signing cert, or self-signed the user trusts once with
+  admin), or MSIX/Store. Decide that first. Also needed: Go passkey signing (only JS signs today; vectors in
+  testdata/passkey.json), plugin functions declared by hand and loaded from webauthn.dll (CBOR via
+  WebAuthNDecode*/Encode*), COM server for IPluginAuthenticator (MakeCredential/GetAssertion/Cancel/GetLockStatus),
+  request signature check, UV via WebAuthNPluginPerformUserVerification, optional autofill cache.
 
 ## Import
 - Bitwarden JSON export: `fido2Credentials` (keyValue = PKCS#8 b64url) → direct import. Add to `storii import`

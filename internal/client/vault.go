@@ -268,16 +268,20 @@ func (v *Vault) Delete(ctx context.Context, ids ...string) error {
 			return err
 		}
 	}
-	writes := make([]Write, len(ids))
-	for i, id := range ids {
-		writes[i] = Write{ID: id, Delete: true}
-	}
-	if _, err := v.state.API().Write(ctx, writes); err != nil {
-		return err
-	}
-	for _, id := range ids {
-		delete(v.state.Items, id)
-		delete(v.Items, id)
+	// The server takes at most 2000 writes per batch and each id once.
+	ids = slices.Compact(slices.Sorted(slices.Values(ids)))
+	for chunk := range slices.Chunk(ids, 1000) {
+		writes := make([]Write, len(chunk))
+		for i, id := range chunk {
+			writes[i] = Write{ID: id, Delete: true}
+		}
+		if _, err := v.state.API().Write(ctx, writes); err != nil {
+			return err
+		}
+		for _, id := range chunk {
+			delete(v.state.Items, id)
+			delete(v.Items, id)
+		}
 	}
 	return nil
 }

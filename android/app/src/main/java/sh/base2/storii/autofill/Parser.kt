@@ -18,12 +18,23 @@ data class ParsedScreen(
     /** "New password" and "repeat password" fields (signup, reset, change password). */
     val newPasswords: List<AutofillId> = emptyList(),
     val newPasswordValue: String = "",
+    /** What the card fields hold (for saving a card typed into a form). */
+    val cardValues: Map<CardField, String> = emptyMap(),
+    /** The options of card fields that are dropdowns (month, year), in order. */
+    val cardOptions: Map<CardField, List<String>> = emptyMap(),
+    /** The year field takes two digits ("29", not "2029"). */
+    val shortYear: Boolean = false,
 ) {
     val ids get() = (listOfNotNull(username, password, otp) + newPasswords + card.values).distinct()
     val hasCard get() = CardField.NUMBER in card
     /** What a submitted form should save: the new password where there is one. */
     val savedPassword get() = newPasswordValue.ifEmpty { passwordValue }
     val isEmpty get() = ids.isEmpty()
+    /** The card typed into this form, as a card item's fields, if it is a whole valid card number. */
+    val submittedCard get() = if (!hasCard) null else cardValues.let { v ->
+        sh.base2.storii.core.Card.fromForm(v[CardField.NUMBER].orEmpty(), v[CardField.NAME].orEmpty(), v[CardField.MONTH].orEmpty(),
+            v[CardField.YEAR].orEmpty(), v[CardField.EXPIRY].orEmpty(), v[CardField.CVC].orEmpty())
+    }
 }
 
 private val OTP_WORDS = Regex("one.?time|otp|totp|2fa|mfa|two.?factor|verification.?code|auth(entication)?.?code|security.?code|passcode", RegexOption.IGNORE_CASE)
@@ -47,12 +58,31 @@ object Parser {
     fun parse(structure: AssistStructure): ParsedScreen {
         val nodes = mutableListOf<Pair<AssistStructure.ViewNode, Kind>>()
         val card = linkedMapOf<CardField, AutofillId>()
+        val cardValues = linkedMapOf<CardField, String>()
+        val cardOptions = linkedMapOf<CardField, List<String>>()
+        var shortYear = false
         var webDomain: String? = null
         fun walk(n: AssistStructure.ViewNode) {
             if (webDomain == null && !n.webDomain.isNullOrBlank()) webDomain = n.webDomain
             if (n.autofillId != null && n.autofillType == View.AUTOFILL_TYPE_TEXT && n.visibility == View.VISIBLE) {
                 val c = cardField(n)
-                if (c != null) card.putIfAbsent(c, n.autofillId!!) else classify(n)?.let { nodes += n to it }
+                if (c != null) {
+                    if (card.putIfAbsent(c, n.autofillId!!) == null) {
+                        value(n)?.let { cardValues[c] = it }
+                        if (c == CardField.YEAR && maxLength(n) == 2) shortYear = true
+                    }
+                } else classify(n)?.let { nodes += n to it }
+            } else if (n.autofillId != null && n.autofillType == View.AUTOFILL_TYPE_LIST && n.visibility == View.VISIBLE) {
+                // Expiry month and year are often dropdowns (<select>).
+                val c = cardField(n)
+                val options = n.autofillOptions?.map { it.toString() }.orEmpty()
+                if ((c == CardField.MONTH || c == CardField.YEAR) && options.isNotEmpty() && card.putIfAbsent(c, n.autofillId!!) == null) {
+                    cardOptions[c] = options
+                    n.autofillValue?.takeIf { it.isList }?.listValue?.let(options::getOrNull)?.let {
+                        val v = if (c == CardField.MONTH) sh.base2.storii.core.Card.monthOf(it) else sh.base2.storii.core.Card.yearOf(it)
+                        if (v.isNotEmpty()) cardValues[c] = v
+                    }
+                }
             }
             for (i in 0 until n.childCount) walk(n.getChildAt(i))
         }
@@ -78,8 +108,14 @@ object Parser {
             newPasswordValue = fresh.firstOrNull()?.first?.let(::value).orEmpty(),
             // A lone "security code" without a card number is a 2FA field, not a card.
             card = if (CardField.NUMBER in card) card else emptyMap(),
+            cardValues = if (CardField.NUMBER in card) cardValues else emptyMap(),
+            cardOptions = if (CardField.NUMBER in card) cardOptions else emptyMap(),
+            shortYear = shortYear,
         ).let { s -> if (s.hasCard || CardField.CVC !in card) s else s.copy(otp = s.otp ?: card[CardField.CVC]) }
     }
+
+    private fun maxLength(n: AssistStructure.ViewNode): Int =
+        n.htmlInfo?.attributes?.firstOrNull { it.first.equals("maxlength", true) }?.second?.toIntOrNull() ?: n.maxTextLength
 
     private fun value(n: AssistStructure.ViewNode) = n.autofillValue?.takeIf { it.isText }?.textValue?.toString()
     private fun hints(n: AssistStructure.ViewNode) = n.autofillHints.orEmpty().toList()
@@ -88,7 +124,7 @@ object Parser {
 
     private fun cardField(n: AssistStructure.ViewNode): CardField? {
         val html = n.htmlInfo
-        if (html != null && html.tag.lowercase() != "input") return null
+        if (html != null && html.tag.lowercase() !in setOf("input", "select")) return null
         val hints = n.autofillHints.orEmpty().toSet()
         val autocomplete = html?.attributes?.firstOrNull { it.first == "autocomplete" }?.second?.lowercase()?.split(' ')?.last().orEmpty()
         CardField.entries.firstOrNull { it.hint in hints || it.autocomplete == autocomplete }?.let { return it }

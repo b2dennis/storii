@@ -81,6 +81,7 @@ dist version=VERSION: windows extension
   for arch in amd64 arm64; do
     d=build/stage/storii-{{version}}-windows-$arch; rm -rf $d; mkdir -p $d
     cp {{BUILD_DIR}}/windows-$arch/storii-tray.exe {{BUILD_DIR}}/windows-$arch/storii.exe LICENSE README.md $d/
+    cp -r packaging/windows $d/passkeys
     (cd build/stage && zip -qr ../dist/storii-{{version}}-windows-$arch.zip storii-{{version}}-windows-$arch)
   done
   (cd extension/dist/chrome && zip -qr ../../../build/dist/storii-{{version}}-chrome.zip .)

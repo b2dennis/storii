@@ -48,6 +48,14 @@ const CHECKOUT_PAGE = `<!doctype html><title>Checkout</title><form action="/welc
   <button type="submit">Pay now</button>
 </form>`;
 
+// Like Stripe Elements: number, expiry and CVC each in an iframe of a payment host, and a Pay button (type=button)
+// that stays on the page.
+const SPA_CHECKOUT = `<!doctype html><title>Pay</title><div style="margin:40px">
+  <iframe id="fn" src="PAY/field?ac=cc-number" style="width:300px;height:40px"></iframe>
+  <iframe id="fe" src="PAY/field?ac=cc-exp" style="width:300px;height:40px"></iframe>
+  <iframe id="fc" src="PAY/field?ac=cc-csc" style="width:300px;height:40px"></iframe>
+  <button type="button" onclick="this.textContent='Paid'">Pay CHF 20.00</button></div>`;
+
 let up = false;
 let site, siteURL, ctx, extId;
 
@@ -63,6 +71,8 @@ before(async () => {
     if (req.url === '/reset') return res.end(RESET_PAGE);
     if (req.url === '/rp') return res.end('<!doctype html><title>Passkey site</title><p>A site with passkeys</p>');
     if (req.url === '/checkout') return res.end(CHECKOUT_PAGE.replace('PORT', site.address().port));
+    if (req.url === '/spa-checkout') return res.end(SPA_CHECKOUT.replaceAll('PAY', `http://localhost:${site.address().port}`));
+    if (req.url.startsWith('/field?')) return res.end(`<!doctype html><input id="i" autocomplete="${new URL(req.url, 'http://x').searchParams.get('ac')}" style="width:200px">`);
     if (req.url === '/evil') return res.end('<!doctype html><input id="n" autocomplete="cc-number" style="width:200px">');
     if (req.url === '/welcome') return res.end('<!doctype html><title>Welcome</title><p>Welcome!</p>');
     res.end(LOGIN_PAGE);
@@ -244,6 +254,55 @@ test('register, add secrets in the popup, autofill, save prompt', { timeout: 120
   const newCard = withCard.find((i) => i.type === 'card' && i.fields?.number === '5555555555554444');
   assert.ok(newCard, 'the typed card was saved');
   assert.deepEqual([newCard.name, newCard.fields.expiry, newCard.fields.cvc, newCard.fields.cardholder], ['Mastercard 4444', '03/30', '987', 'New Card']);
+
+  // A card in payment-provider iframes, paid with a button that doesn't leave the page: offered right away.
+  await page.goto(`${siteURL}/spa-checkout`);
+  const field = (ac) => page.frames().find((f) => f.url().includes(`ac=${ac}`));
+  for (const [ac, v] of [['cc-number', '4000 0566 5566 5556'], ['cc-exp', '11 / 31'], ['cc-csc', '321']]) {
+    await field(ac).fill('#i', v);
+    await page.keyboard.press('Escape');
+  }
+  await page.click('button');
+  await page.waitForTimeout(1200);
+  await page.mouse.click(page.viewportSize().width - 12 - 40, 12 + 70);
+  await page.waitForTimeout(800);
+  const withSpaCard = await popup.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'items' }, (x) => r(x.result))));
+  const spaCard = withSpaCard.find((i) => i.type === 'card' && i.fields?.number === '4000056655665556');
+  assert.ok(spaCard, 'the card typed into payment iframes was saved');
+  assert.deepEqual([spaCard.name, spaCard.fields.expiry, spaCard.fields.cvc], ['Visa 5556', '11/31', '321']);
+
+  // More writes than the server takes in one request (a big import): sent in chunks.
+  const many = await popup.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'saveMany', changes:
+    Array.from({ length: 2100 }, (_, i) => ({ item: { kind: 'secret', type: 'note', name: `Bulk ${i}`, fields: { note: 'x' } } })) }, r)));
+  assert.ok(!many.error, many.error);
+  const afterBulk = await popup.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'items' }, (x) => r(x.result))));
+  assert.equal(afterBulk.filter((i) => i.name?.startsWith('Bulk ')).length, 2100);
+  const bulkIds = afterBulk.filter((i) => i.name?.startsWith('Bulk ')).map((i) => i.id);
+  const gone = await popup.evaluate((ids) => new Promise((r) => chrome.runtime.sendMessage({ type: 'delete', ids }, r)), bulkIds);
+  assert.ok(!gone.error, gone.error);
+
+  // Locked: the card is still offered, and the bar unlocks storii first.
+  await popup.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'lock' }, r)));
+  await page.goto(`${siteURL}/checkout`);
+  await page.fill('#num', '3782 822463 10005');
+  await page.keyboard.press('Escape');
+  await page.fill('#cvc', '4321');
+  await Promise.all([page.waitForURL('**/welcome'), page.click('button[type=submit]')]);
+  await page.waitForTimeout(800);
+  await page.mouse.click(page.viewportSize().width - 12 - 40, 12 + 70);
+  const barUnlock = await (async () => {
+    for (let i = 0; i < 30; i++) {
+      const f = page.frames().find((x) => x.url().includes('unlock.html'));
+      if (f) return f;
+      await page.waitForTimeout(100);
+    }
+  })();
+  assert.ok(barUnlock, "the save bar asks to unlock");
+  await barUnlock.fill('#pw', MASTER);
+  await barUnlock.press('#pw', 'Enter');
+  await page.waitForTimeout(1500);
+  const afterUnlock = await popup.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'items' }, (x) => r(x.result))));
+  assert.ok(afterUnlock?.some((i) => i.type === 'card' && i.fields?.number === '378282246310005'), 'the card typed while locked was saved');
 
   // Passkeys: storii answers navigator.credentials after the user approves in its window; an independent relying
   // party (SimpleWebAuthn) verifies the registration and the sign-in.

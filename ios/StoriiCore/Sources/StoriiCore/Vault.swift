@@ -223,15 +223,21 @@ public final class Vault {
                 writes.append(Write(id: id, data: try StoriiCrypto.encryptItem(vaultKey: key, id: id, item: item)))
             }
         }
-        let rev = try await API(s.server, token: s.token).write(writes)
-        // Another write may have landed while this one was in flight; start from the newest state.
-        s = state ?? s
-        for w in writes {
-            if w.delete { s.items[w.id] = nil } else { s.items[w.id] = RemoteItem(id: w.id, data: w.data, revision: rev) }
+        // The server takes at most 2000 writes per request (a big import has more); each chunk is kept once it's stored.
+        defer {
+            decryptAll()
+            onChange?()
         }
-        try save(s)
-        decryptAll()
-        onChange?()
+        for start in stride(from: 0, to: writes.count, by: 1000) {
+            let chunk = Array(writes[start..<min(start + 1000, writes.count)])
+            let rev = try await API(s.server, token: s.token).write(chunk)
+            // Another write may have landed while this one was in flight; start from the newest state.
+            s = state ?? s
+            for w in chunk {
+                if w.delete { s.items[w.id] = nil } else { s.items[w.id] = RemoteItem(id: w.id, data: w.data, revision: rev) }
+            }
+            try save(s)
+        }
         return writes.map(\.id)
     }
 
