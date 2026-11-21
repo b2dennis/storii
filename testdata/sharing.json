@@ -1,0 +1,27 @@
+{
+  "comment": "Sharing crypto (docs/CRYPTO.md#sharing). Fixed keys and nonces; regenerate with go test ./internal/vault -run TestShareVector -update.",
+  "vault_key": "dmF1bHQta2V5LWZvci10aGUtc2hhcmluZy12ZWN0b3I=",
+  "private_key": "YWxpY2Utc2hhcmUtcHJpdmF0ZS1rZXktMzItYnl0ZXM=",
+  "public_key": "PPH8aDlAUmGDAh2fEsVOqiEugJzYkjTCo7pIg5KBP3E=",
+  "sealed_private_key": "AQEBAQEBAQEBAQEBAXpvqN/POpZW+FRfjtGUuacZi63KUFxILF/xWHDkvttLNRVHYjp29SPp2jYgD1sIZA==",
+  "fingerprint": "0680 7dab 5560 69ab 26dd 4851 afa9 1e73",
+  "share_id": "5a7e0c1d-2b3f-4a5b-8c6d-7e8f90a1b2c3",
+  "share_key": "ZmFtaWx5LXNoYXJlLWtleS0zMi1ieXRlcy1sb25nISE=",
+  "ephemeral_private_key": "ZXBoZW1lcmFsLXByaXZhdGUta2V5LTMyLWJ5dGVzISE=",
+  "wrapped_key": "bryIUTGD1rkUNbonD4M2ktdUaqbbCktFJDulCaJMqmY=.AQICAgICAgICAgICAkw5AAkdLNFDn2y9Pol1zMJUp5ClB1gxZYPjKUWDpXyWDU+D89qvnvx7Zn5GJJwjoQ==",
+  "meta": {
+    "name": "Family"
+  },
+  "meta_data": "AQMDAwMDAwMDAwMDA07gS89b30YbVMTNC0lgiZfBhWLFSGbk4pHdh4u83kJtDg==",
+  "item_id": "5a7e0c1d-2b3f-4a5b-8c6d-000000000001",
+  "item": {
+    "kind": "secret",
+    "type": "password",
+    "name": "Netflix",
+    "fields": {
+      "username": "family@example.com",
+      "password": "popcorn-Night-7"
+    }
+  },
+  "item_data": "AQQEBAQEBAQEBAQEBH2jGFzoElfDz8qOkU6rTyy2BH+1Q/so+0A7R7TlsXx7cM0dMBRqB3q0lEstx9mZW6llh13fTOZALAtA+MBYxYIwXQt7zshl+08EGVxXJafwaGiLkdIzqkkCqU3zOA2n9Fe/yskK0gnS4d7T3I8w4Ttxn1qGJySHTfmiMclvUYjh5Sy2aeo5wlqE9Pd3"
+}

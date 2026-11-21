@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Backups · storii</title>
+  <link rel="stylesheet" href="../popup/popup.css">
+  <link rel="stylesheet" href="../import/import.css">
+</head>
+<body class="page">
+  <main>
+    <h1>Backups</h1>
+    <p class="muted">A backup is one file with all your secrets and contexts, encrypted with a backup password you
+      choose. It opens without the storii server or your account, in the extension, the apps or the CLI. Keep the file
+      somewhere safe and the password somewhere else.</p>
+
+    <section id="locked" hidden>
+      <p class="err">storii is locked. Unlock it, then come back to this tab.</p>
+      <button id="unlock" class="primary">Unlock storii</button>
+    </section>
+
+    <section id="main">
+      <h2>Download a backup</h2>
+      <form id="export" class="col">
+        <input type="password" id="pw" placeholder="Backup password" autocomplete="new-password" required>
+        <input type="password" id="pw2" placeholder="Repeat it" autocomplete="new-password" required>
+        <div class="err" id="exportErr" role="alert"></div>
+        <div class="row"><button id="download" class="primary" type="submit">Download backup</button></div>
+        <p id="exported" class="muted small"></p>
+      </form>
+
+      <h2>Restore a backup</h2>
+      <p class="muted small">Adds the backup’s items that aren’t in storii, exactly as they were backed up. Items storii
+        already has are left as they are.</p>
+      <input type="file" id="file" accept=".json,application/json">
+      <form id="restore" class="col" hidden>
+        <input type="password" id="rpw" placeholder="Backup password" autocomplete="off" required>
+        <div class="row"><button id="check" class="primary" type="submit">Open backup</button></div>
+      </form>
+      <div class="err" id="restoreErr" role="alert"></div>
+      <div class="card" id="summary" hidden></div>
+      <div class="row"><button id="go" class="primary" hidden>Restore</button></div>
+      <p id="restored"></p>
+    </section>
+  </main>
+  <script type="module" src="backup.js"></script>
+</body>
+</html>

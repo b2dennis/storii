@@ -48,6 +48,8 @@ public struct Item: Codable, Equatable, Hashable, Sendable {
     public var urls: [String]
     public var androidPackages: [String]
     public var notes: String?
+    /// Earlier passwords and API keys, newest first (PasswordHistory.apply).
+    public var history: [HistoryEntry] = []
     public var createdAt: String?
     public var updatedAt: String?
 
@@ -111,7 +113,7 @@ public struct Item: Codable, Equatable, Hashable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case kind, name, type, contexts, fields, custom, urls, notes
+        case kind, name, type, contexts, fields, custom, urls, notes, history
         case contextType = "context_type", androidPackages = "android_packages"
         case createdAt = "created_at", updatedAt = "updated_at"
     }
@@ -128,6 +130,7 @@ public struct Item: Codable, Equatable, Hashable, Sendable {
         urls = try c.decodeIfPresent([String].self, forKey: .urls) ?? []
         androidPackages = try c.decodeIfPresent([String].self, forKey: .androidPackages) ?? []
         notes = try c.decodeIfPresent(String.self, forKey: .notes)
+        history = try c.decodeIfPresent([HistoryEntry].self, forKey: .history) ?? []
         createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
         updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt)
     }
@@ -145,6 +148,7 @@ public struct Item: Codable, Equatable, Hashable, Sendable {
         if !urls.isEmpty { try c.encode(urls, forKey: .urls) }
         if !androidPackages.isEmpty { try c.encode(androidPackages, forKey: .androidPackages) }
         try opt(notes, .notes)
+        if !history.isEmpty { try c.encode(history, forKey: .history) }
         try opt(createdAt, .createdAt)
         try opt(updatedAt, .updatedAt)
     }

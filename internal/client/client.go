@@ -90,6 +90,9 @@ type Account struct {
 	WrappedKey string    `json:"wrapped_key"`
 	Revision   int64     `json:"revision"`
 	CreatedAt  time.Time `json:"created_at"`
+	// Sharing keys, once set up.
+	PublicKey        string `json:"public_key,omitempty"`
+	SealedPrivateKey string `json:"sealed_private_key,omitempty"`
 }
 
 type SessionResp struct {

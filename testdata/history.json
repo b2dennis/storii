@@ -1,0 +1,89 @@
+{
+  "comment": "Password history shared by the Go, Kotlin, Swift and JS tests: what the write path stores when next replaces prev at now. Only the history matters; want is next's history after the write (missing = none).",
+  "now": "2026-11-20T10:00:00Z",
+  "cases": [
+    {
+      "name": "changed password is kept",
+      "prev": {"kind": "secret", "type": "password", "fields": {"username": "a", "password": "old"}},
+      "next": {"kind": "secret", "type": "password", "fields": {"username": "a", "password": "new"}},
+      "want": [{"field": "password", "value": "old", "changed_at": "2026-11-20T10:00:00Z"}]
+    },
+    {
+      "name": "same password adds nothing",
+      "prev": {"kind": "secret", "type": "password", "fields": {"username": "a", "password": "same"}},
+      "next": {"kind": "secret", "type": "password", "fields": {"username": "b", "password": "same"}}
+    },
+    {
+      "name": "empty old password adds nothing",
+      "prev": {"kind": "secret", "type": "password", "fields": {"username": "a"}},
+      "next": {"kind": "secret", "type": "password", "fields": {"username": "a", "password": "first"}}
+    },
+    {
+      "name": "cleared password is kept",
+      "prev": {"kind": "secret", "type": "password", "fields": {"password": "gone"}},
+      "next": {"kind": "secret", "type": "password", "fields": {}},
+      "want": [{"field": "password", "value": "gone", "changed_at": "2026-11-20T10:00:00Z"}]
+    },
+    {
+      "name": "history comes from prev, newest first",
+      "prev": {"kind": "secret", "type": "password", "fields": {"password": "two"},
+        "history": [{"field": "password", "value": "one", "changed_at": "2026-01-01T00:00:00Z"}]},
+      "next": {"kind": "secret", "type": "password", "fields": {"password": "three"},
+        "history": [{"field": "password", "value": "edited by a client", "changed_at": "2026-02-01T00:00:00Z"}]},
+      "want": [
+        {"field": "password", "value": "two", "changed_at": "2026-11-20T10:00:00Z"},
+        {"field": "password", "value": "one", "changed_at": "2026-01-01T00:00:00Z"}
+      ]
+    },
+    {
+      "name": "kept when nothing changed",
+      "prev": {"kind": "secret", "type": "password", "fields": {"password": "two"},
+        "history": [{"field": "password", "value": "one", "changed_at": "2026-01-01T00:00:00Z"}]},
+      "next": {"kind": "secret", "type": "password", "name": "renamed", "fields": {"password": "two"}},
+      "want": [{"field": "password", "value": "one", "changed_at": "2026-01-01T00:00:00Z"}]
+    },
+    {
+      "name": "API key, password before key",
+      "prev": {"kind": "secret", "type": "api_key", "fields": {"key": "k1", "password": "p1"}},
+      "next": {"kind": "secret", "type": "api_key", "fields": {"key": "k2", "password": "p2"}},
+      "want": [
+        {"field": "password", "value": "p1", "changed_at": "2026-11-20T10:00:00Z"},
+        {"field": "key", "value": "k1", "changed_at": "2026-11-20T10:00:00Z"}
+      ]
+    },
+    {
+      "name": "other fields aren't kept",
+      "prev": {"kind": "secret", "type": "totp", "fields": {"secret": "JBSWY3DPEHPK3PXP"}},
+      "next": {"kind": "secret", "type": "totp", "fields": {"secret": "KRSXG5CTMVRXEZLU"}}
+    },
+    {
+      "name": "at most 10, oldest dropped",
+      "prev": {"kind": "secret", "type": "password", "fields": {"password": "p10"},
+        "history": [
+          {"field": "password", "value": "p9", "changed_at": "2026-01-09T00:00:00Z"},
+          {"field": "password", "value": "p8", "changed_at": "2026-01-08T00:00:00Z"},
+          {"field": "password", "value": "p7", "changed_at": "2026-01-07T00:00:00Z"},
+          {"field": "password", "value": "p6", "changed_at": "2026-01-06T00:00:00Z"},
+          {"field": "password", "value": "p5", "changed_at": "2026-01-05T00:00:00Z"},
+          {"field": "password", "value": "p4", "changed_at": "2026-01-04T00:00:00Z"},
+          {"field": "password", "value": "p3", "changed_at": "2026-01-03T00:00:00Z"},
+          {"field": "password", "value": "p2", "changed_at": "2026-01-02T00:00:00Z"},
+          {"field": "password", "value": "p1", "changed_at": "2026-01-01T00:00:00Z"},
+          {"field": "password", "value": "p0", "changed_at": "2025-12-31T00:00:00Z"}
+        ]},
+      "next": {"kind": "secret", "type": "password", "fields": {"password": "p11"}},
+      "want": [
+        {"field": "password", "value": "p10", "changed_at": "2026-11-20T10:00:00Z"},
+        {"field": "password", "value": "p9", "changed_at": "2026-01-09T00:00:00Z"},
+        {"field": "password", "value": "p8", "changed_at": "2026-01-08T00:00:00Z"},
+        {"field": "password", "value": "p7", "changed_at": "2026-01-07T00:00:00Z"},
+        {"field": "password", "value": "p6", "changed_at": "2026-01-06T00:00:00Z"},
+        {"field": "password", "value": "p5", "changed_at": "2026-01-05T00:00:00Z"},
+        {"field": "password", "value": "p4", "changed_at": "2026-01-04T00:00:00Z"},
+        {"field": "password", "value": "p3", "changed_at": "2026-01-03T00:00:00Z"},
+        {"field": "password", "value": "p2", "changed_at": "2026-01-02T00:00:00Z"},
+        {"field": "password", "value": "p1", "changed_at": "2026-01-01T00:00:00Z"}
+      ]
+    }
+  ]
+}

@@ -233,7 +233,11 @@ struct EditView: View {
             return
         }
         Task {
-            if let cid = await model.put(nil, .context(host, urls: ["https://" + host])) { item.contexts.append(cid) }
+            // A shared secret's new context goes into the same share, so the other members get it too.
+            let share = id.flatMap { model.vault.shareOf($0)?.id }
+            if let cid = await model.write([.put(id: nil, item: .context(host, urls: ["https://" + host]), share: share)])?.first {
+                item.contexts.append(cid)
+            }
         }
     }
 

@@ -96,9 +96,44 @@ without the master password. Each client handles the vault key like this:
 - **iOS**: in memory, and with Face ID in a Keychain item with `.biometryCurrentSet`, shared with the AutoFill
   extension through a keychain access group.
 
+## Backups
+
+A backup file is JSON:
+
+```json
+{"storii_backup": 1, "exported_at": "2026-11-20T12:00:00Z",
+ "kdf": {"alg": "argon2id", "salt": "…", "iterations": 3, "memory_kib": 65536, "parallelism": 2},
+ "data": "<envelope>"}
+```
+
+The key is the `wrap` key derived from the backup password with that `kdf` (same Argon2id + HKDF as the login keys,
+with a fresh salt). `data` is the envelope of `{"items": {"<id>": <item plaintext>, …}}` with AAD `storii:backup`.
+Restoring re-encrypts each item with the vault key under its original id (so context links survive) and skips ids
+the vault already has. The backup password follows the master-password rule. `testdata/backup.json` pins the format
+for every client.
+
+## Sharing
+
+Each account has an X25519 key pair, made by the first client that unlocks after sharing arrived. The public key is
+stored in the clear; the private key is an envelope under the vault key with AAD `storii:share-private-key`, so it
+survives master-password changes. A key's fingerprint is the first 16 bytes of SHA-256(public key) as eight groups of
+four hex digits; clients show it before adding someone, to compare out of band (the server could otherwise hand out its
+own key).
+
+A share has a random 32-byte share key. It is wrapped for each member as `base64(ephemeral public key) "." envelope`,
+where the envelope's key is HKDF-SHA256(ikm = X25519(ephemeral, member) || ephemeral public || member public, no salt,
+info `storii share key`) and its AAD is `storii:share-key:<share id>`. The share's name is an envelope of
+`{"name": …}` under the share key with AAD `storii:share:<share id>`; its items are envelopes of the usual item
+plaintext with AAD `storii:share:<share id>:item:<item id>`, so an item can't be moved between shares or into a
+personal vault by the server. `testdata/sharing.json` pins all of it.
+
+The owner adds and removes members and renames or deletes the share; every member reads and writes its items. Removing
+a member doesn't rotate the share key: they could still decrypt anything they had (and anything written later, if the
+server gave it to them), so change passwords that matter.
+
 ## What the server can still see
 
-- Usernames.
+- Usernames, and who shares with whom (any signed-in user can check whether a username exists via its sharing key).
 - How many items an account has, their sizes and when they change.
 - Device names and IP addresses.
 

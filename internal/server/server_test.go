@@ -133,6 +133,16 @@ func TestVaultLifecycle(t *testing.T) {
 		t.Fatal("invalid items must be rejected client-side")
 	}
 
+	// Changing a password keeps the old one in the item's history.
+	changed := v.Items[pw]
+	changed.Fields = map[string]string{"username": "dennis", "password": "n3w"}
+	if _, err := v.PutOne(ctx, pw, changed); err != nil {
+		t.Fatal(err)
+	}
+	if h := v.Items[pw].History; len(h) != 1 || h[0].Value != "s3cret" {
+		t.Fatalf("history after a change: %+v", h)
+	}
+
 	// The server only has ciphertext.
 	conn, _ := pgx.Connect(ctx, e.dsn)
 	defer conn.Close(ctx)
@@ -225,6 +235,103 @@ func TestVaultLifecycle(t *testing.T) {
 	}
 	if _, _, err := client.Login(ctx, e.url, "dennis", "Correct-Horse-42", "x"); err == nil {
 		t.Fatal("old password still works")
+	}
+
+	// The trash keeps deleted items, readable with the vault key after the password change, newest first.
+	trash, days, err := v4.Trash(ctx)
+	if err != nil || days != store.TrashDays || len(trash) != 3 || trash[0].ID != otp {
+		t.Fatalf("trash: %v, %d days, %+v", err, days, trash)
+	}
+	byID := map[string]client.Deleted{}
+	for _, d := range trash {
+		byID[d.ID] = d
+	}
+	if byID[pw].Name != "GitHub login" || len(byID[pw].History) != 1 {
+		t.Fatalf("trashed login: %+v", byID[pw].Item)
+	}
+	// Deleting a deleted item again keeps its first deletion time.
+	if err := v4.Delete(ctx, otp); err != nil {
+		t.Fatal(err)
+	}
+	if again, _, _ := v4.Trash(ctx); len(again) != 3 || !again[0].DeletedAt.Equal(trash[0].DeletedAt) {
+		t.Fatalf("second delete: %+v", again)
+	}
+	// Restoring puts the item back under its id, for other devices too, and takes it out of the trash.
+	if err := v4.Restore(ctx, byID[pw]); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if v.Items[pw].Fields["password"] != "n3w" || len(v4.Items) != 3 {
+		t.Fatalf("restored: %+v, %d items", v.Items[pw], len(v4.Items))
+	}
+	if left, _, _ := v4.Trash(ctx); len(left) != 2 {
+		t.Fatalf("trash after restore: %d", len(left))
+	}
+	// Emptying forgets the given ids, or everything.
+	if err := st.API().EmptyTrash(ctx, []string{ci}); err != nil {
+		t.Fatal(err)
+	}
+	if left, _, _ := v4.Trash(ctx); len(left) != 1 || left[0].ID != otp {
+		t.Fatalf("after emptying one: %+v", left)
+	}
+	if err := v.Delete(ctx, pw); err != nil {
+		t.Fatal(err)
+	}
+	// Items deleted more than TrashDays ago are purged.
+	conn.Exec(ctx, `UPDATE items SET deleted_at = now() - interval '31 days' WHERE id = $1`, otp)
+	if left, _, _ := v4.Trash(ctx); len(left) != 1 || left[0].ID != pw {
+		t.Fatalf("expired items listed: %+v", left)
+	}
+	db, err := store.Open(ctx, e.dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.PurgeTrash(ctx); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	var kept int
+	conn.QueryRow(ctx, `SELECT count(*) FROM items WHERE deleted_data IS NOT NULL`).Scan(&kept)
+	if kept != 1 {
+		t.Fatalf("after purge %d trashed items, want 1", kept)
+	}
+	if code, _ := raw(t, "DELETE", e.url+"/api/v2/trash", st.Token, nil); code != 204 {
+		t.Fatal("empty trash", code)
+	}
+	if left, _, _ := v4.Trash(ctx); len(left) != 0 {
+		t.Fatalf("after emptying: %+v", left)
+	}
+
+	// A backup restores into another account, links and history intact; a second restore adds nothing.
+	backup, err := v4.Backup("Backup-Pass-99")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, other, err := client.Register(ctx, e.url, "backupuser", "Other-Horse-321", "test B")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := other.RestoreBackup(ctx, "wrong", backup, false); err != vault.ErrBackupPassword {
+		t.Fatalf("wrong backup password: %v", err)
+	}
+	res, err := other.RestoreBackup(ctx, "Backup-Pass-99", backup, false)
+	if err != nil || len(res.Added) != len(v4.Items) || res.Skipped != 0 {
+		t.Fatalf("restore: %v %+v", err, res)
+	}
+	for id, it := range v4.Items {
+		got, _ := other.Items[id].Marshal()
+		want, _ := it.Marshal()
+		if string(got) != string(want) {
+			t.Fatalf("restored %s: %s, want %s", id, got, want)
+		}
+	}
+	if err := other.Refresh(ctx); err != nil || len(other.Items) != len(v4.Items) {
+		t.Fatalf("after refresh: %v, %d items", err, len(other.Items))
+	}
+	if res, _ := other.RestoreBackup(ctx, "Backup-Pass-99", backup, false); len(res.Added) != 0 || res.Skipped != len(v4.Items) {
+		t.Fatalf("second restore: %+v", res)
 	}
 
 	// Server-side validation.

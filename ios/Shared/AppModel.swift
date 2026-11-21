@@ -26,6 +26,7 @@ final class AppModel {
     let vault = Vault(file: SharedStore.vaultFile)
     private(set) var status: VaultStatus = .notSetUp
     private(set) var items: [String: Item] = [:]
+    private(set) var shares: [Share] = []
     private(set) var busy = false
     var error: String?
     private var backgroundSince: Date?
@@ -38,6 +39,7 @@ final class AppModel {
     private func refresh() {
         status = vault.status
         items = vault.items
+        shares = vault.shares()
     }
 
     var isUnlocked: Bool { if case .unlocked = status { true } else { false } }
@@ -129,6 +131,36 @@ final class AppModel {
     func delete(_ ids: [String]) async -> Bool {
         await run {
             try await vault.delete(ids)
+            await Identities.update(vault)
+        }
+    }
+
+    /// Puts deleted items back; identities (AutoFill) are refreshed since restored logins can fill again.
+    func restore(_ deleted: [Vault.Deleted]) async -> Bool {
+        await run {
+            try await vault.restore(deleted)
+            await Identities.update(vault)
+        }
+    }
+
+    /// Restores a backup's new items; returns how many, or nil on failure (see `error`).
+    func restoreBackup(_ plan: Backup.Plan) async -> Int? {
+        var n = 0
+        let ok = await run {
+            n = try await vault.restoreBackup(plan)
+            await Identities.update(vault)
+        }
+        return ok ? n : nil
+    }
+
+    // MARK: sharing
+
+    func shareOf(_ id: String) -> Share? { _ = items; return vault.shareOf(id) }
+
+    /// Moves items into a share ("" = the personal vault); their contexts follow as Vault.move describes.
+    func move(_ ids: [String], to share: String) async -> Bool {
+        await run {
+            try await vault.move(ids, to: share)
             await Identities.update(vault)
         }
     }

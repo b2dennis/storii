@@ -1,5 +1,7 @@
 package sh.base2.storii.core
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -12,13 +14,15 @@ val StoriiJson = Json {
     encodeDefaults = false
 }
 
+/** Always sent in full: the server rejects a KDF with missing parameters (StoriiJson leaves defaults out otherwise). */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class Kdf(
-    val alg: String = "argon2id",
+    @EncodeDefault val alg: String = "argon2id",
     val salt: String,
-    val iterations: Int = 3,
-    @SerialName("memory_kib") val memoryKib: Int = 65536,
-    val parallelism: Int = 2,
+    @EncodeDefault val iterations: Int = 3,
+    @EncodeDefault @SerialName("memory_kib") val memoryKib: Int = 65536,
+    @EncodeDefault val parallelism: Int = 2,
 )
 
 @Serializable
@@ -37,6 +41,8 @@ data class Item(
     val urls: List<String> = emptyList(),
     @SerialName("android_packages") val androidPackages: List<String> = emptyList(),
     val notes: String? = null,
+    /** Earlier passwords and API keys, newest first (PasswordHistory.apply). */
+    val history: List<HistoryEntry> = emptyList(),
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
 ) {

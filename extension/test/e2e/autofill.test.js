@@ -6,7 +6,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -281,6 +281,88 @@ test('register, add secrets in the popup, autofill, save prompt', { timeout: 120
   const gone = await popup.evaluate((ids) => new Promise((r) => chrome.runtime.sendMessage({ type: 'delete', ids }, r)), bulkIds);
   assert.ok(!gone.error, gone.error);
 
+  // Changing a password keeps the old one in the item's history.
+  // (Its own item: later steps rely on the other logins' passwords.)
+  const [histId] = (await popup.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'saveMany', changes: [
+    { item: { kind: 'secret', type: 'password', name: 'History test', fields: { username: 'h', password: 'first-Pw-0' } } }] }, r)))).result;
+  const login = (await popup.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'items' }, (x) => r(x.result)))))
+    .find((i) => i.id === histId);
+  const { id: loginId, ...loginItem } = login;
+  await popup.evaluate(({ id, item }) => new Promise((r) => chrome.runtime.sendMessage({ type: 'saveMany', changes: [{ id, item }] }, r)),
+    { id: loginId, item: { ...loginItem, fields: { ...loginItem.fields, password: 'changed-Pw-1' } } });
+  const withHistory = (await popup.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'items' }, (x) => r(x.result)))))
+    .find((i) => i.id === loginId);
+  assert.equal(withHistory.fields.password, 'changed-Pw-1');
+  assert.equal(withHistory.history?.[0]?.value, login.fields.password);
+
+  // Password health: two items sharing a weak password, and a breach check against a stand-in for Have I Been Pwned.
+  await popup.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'saveMany', changes: [
+    { item: { kind: 'secret', type: 'password', name: 'Weak One', fields: { password: 'hunter22' } } },
+    { item: { kind: 'secret', type: 'password', name: 'Weak Two', fields: { password: 'hunter22' } } }] }, r)));
+  await popup.reload();
+  await popup.waitForSelector('#q');
+  await popup.click('#settings');
+  await popup.click('#health');
+  await popup.waitForSelector('#breach');
+  // Within a group, entries follow their (random) ids.
+  assert.match(await popup.textContent('#app'), /Reused passwords.*Weak (One|Two).*Weak (One|Two).*Weak passwords.*Weak (One|Two).*Weak (One|Two)/s);
+  const [hPre, hSuf] = await popup.evaluate(async () => (await import('../lib/health.js')).pwnedHash('hunter22'));
+  const pwnedRequests = [];
+  await popup.route('https://api.pwnedpasswords.com/range/*', (route) => {
+    const url = route.request().url();
+    pwnedRequests.push([url, route.request().headers()['add-padding']]);
+    route.fulfill({ status: 200, body: url.endsWith('/' + hPre) ? `${hSuf}:7\r\nABC:0\r\n` : 'ABC:0\r\n' });
+  });
+  await popup.click('#breach');
+  await popup.waitForFunction(() => document.querySelector('#app').textContent.includes('Seen 7 times'), null, { timeout: 15000 });
+  assert.ok(pwnedRequests.length > 0 && pwnedRequests.every(([u, pad]) => /\/range\/[0-9A-F]{5}$/.test(u) && pad === 'true'),
+    JSON.stringify(pwnedRequests));
+  assert.equal((await popup.$$('text=Seen 7 times')).length, 2);
+  await popup.unroute('https://api.pwnedpasswords.com/range/*');
+
+  // Trash: a deleted secret shows up under Recently deleted and comes back with Restore.
+  const weakOne = (await popup.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'items' }, r))))
+    .result.find((i) => i.name === 'Weak One');
+  await popup.evaluate((id) => new Promise((r) => chrome.runtime.sendMessage({ type: 'delete', ids: [id] }, r)), weakOne.id);
+  await popup.reload();
+  await popup.waitForSelector('#q');
+  await popup.click('#settings');
+  await popup.click('#trash');
+  await popup.waitForSelector(`[data-restore="${weakOne.id}"]`);
+  assert.match(await popup.textContent('#app'), /Weak One.*deleted/s);
+  await popup.click(`[data-restore="${weakOne.id}"]`);
+  await popup.waitForSelector(`[data-restore="${weakOne.id}"]`, { state: 'detached', timeout: 15000 });
+  const back = (await popup.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'items' }, r)))).result;
+  assert.ok(back.some((i) => i.id === weakOne.id && i.fields.password === 'hunter22'));
+
+  // Backups: download one on the backups page, delete a secret, and restore it from the file.
+  const bk = await ctx.newPage();
+  await bk.goto(`chrome-extension://${extId}/backup/backup.html`);
+  await bk.fill('#pw', 'short');
+  await bk.fill('#pw2', 'short');
+  await bk.click('#download');
+  assert.match(await bk.textContent('#exportErr'), /12 characters/);
+  await bk.fill('#pw', 'Backup-Horse-77x');
+  await bk.fill('#pw2', 'Backup-Horse-77x');
+  const [dl] = await Promise.all([bk.waitForEvent('download'), bk.click('#download')]);
+  const backupText = readFileSync(await dl.path(), 'utf8');
+  assert.ok(JSON.parse(backupText).storii_backup === 1 && !backupText.includes('hunter22'));
+  const weakTwo = back.find((i) => i.name === 'Weak Two');
+  await popup.evaluate((id) => new Promise((r) => chrome.runtime.sendMessage({ type: 'delete', ids: [id] }, r)), weakTwo.id);
+  await bk.setInputFiles('#file', { name: 'b.json', mimeType: 'application/json', buffer: Buffer.from(backupText) });
+  await bk.fill('#rpw', 'wrong');
+  await bk.click('#check');
+  await bk.waitForFunction(() => document.querySelector('#restoreErr').textContent.includes('Wrong backup password'), null, { timeout: 30000 });
+  await bk.fill('#rpw', 'Backup-Horse-77x');
+  await bk.click('#check');
+  await bk.waitForSelector('#go:not([hidden])', { timeout: 30000 });
+  assert.match(await bk.textContent('#summary'), /1 to restore.*Weak Two/s);
+  await bk.click('#go');
+  await bk.waitForFunction(() => document.querySelector('#restored').textContent.startsWith('Restored 1 item'), null, { timeout: 30000 });
+  const afterRestore = (await popup.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'items' }, r)))).result;
+  assert.ok(afterRestore.some((i) => i.id === weakTwo.id && i.fields.password === 'hunter22'));
+  await bk.close();
+
   // Locked: the card is still offered, and the bar unlocks storii first.
   await popup.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'lock' }, r)));
   await page.goto(`${siteURL}/checkout`);
@@ -424,4 +506,60 @@ test('register, add secrets in the popup, autofill, save prompt', { timeout: 120
     assert.match(ls, /passkey\s+Passkey site/);
     assert.equal(execFileSync(cli, ['get', 'Work Visa', '--print'], { env }).toString().trim(), '4242424242424242');
   }
+});
+
+test('sharing with a CLI user', { timeout: 120000 }, async (t) => {
+  const cli = process.env.STORII_E2E_CLI;
+  if (!up) return t.skip(`no dev server at ${SERVER}`);
+  if (!cli) return t.skip('set STORII_E2E_CLI to a built storii binary');
+  const bob = `${USER}b`;
+  const env = { ...process.env, STORII_STATE: join(mkdtempSync(join(tmpdir(), 'storii-')), 'state.json'), STORII_PASSWORD: 'Bob-master-password-2' };
+  const run = (...args) => execFileSync(cli, args, { env, input: '' }).toString();
+  run('register', '--server', SERVER, '--user', bob);
+  const bobFp = run('share').match(/fingerprint: ([0-9a-f ]+)/)[1].trim();
+
+  const popup = await ctx.newPage();
+  await popup.goto(`chrome-extension://${extId}/popup/popup.html`);
+  const msg = (type, m = {}) => popup.evaluate(([type, m]) => new Promise((r) => chrome.runtime.sendMessage({ type, ...m }, (x) => r(x))), [type, m]);
+  if (!(await msg('status')).result.unlocked) await msg('unlock', { password: MASTER });
+  const [secretId] = (await msg('saveMany', { changes: [
+    { item: { kind: 'secret', type: 'password', name: 'Family Netflix', fields: { username: 'fam', password: 'popcorn-1' } } }] })).result;
+
+  const page = await ctx.newPage();
+  await page.goto(`chrome-extension://${extId}/sharing/sharing.html`);
+  await page.waitForFunction(() => /[0-9a-f]{4} /.test(document.querySelector('#fp').textContent));
+  await page.fill('#newName', 'Family');
+  await page.click('#create button');
+  await page.waitForSelector('[data-add] input');
+  await page.fill('[data-add] input', bob);
+  await page.click('[data-add] button');
+  // The fingerprint shown before adding is Bob's real one.
+  await page.waitForSelector('[data-confirm]');
+  assert.ok((await page.textContent('.confirm')).includes(bobFp), `${await page.textContent('.confirm')} vs ${bobFp}`);
+  await page.click('[data-confirm]');
+  await page.waitForFunction((b) => document.querySelector('[data-share]').textContent.includes(b) && !document.querySelector('[data-confirm]'), bob);
+  await page.selectOption('[data-move] select', secretId);
+  await page.click('[data-move] button');
+  await page.waitForFunction(() => document.querySelector('[data-share] ul').textContent.includes('Family Netflix'));
+
+  // Bob sees it in the CLI, changes the password; the extension gets the change.
+  assert.match(run('ls'), /Family Netflix\s+\(fam\)\s+\{shared: Family\}/);
+  assert.equal(run('get', 'Family Netflix', '--print').trim(), 'popcorn-1');
+  run('edit', 'Family Netflix', '--field', 'password=popcorn-2');
+  await msg('sync');
+  const item = (await msg('items')).result.find((i) => i.id === secretId);
+  assert.equal(item.fields.password, 'popcorn-2');
+  assert.ok(item.share, 'still in the share');
+
+  // Moving it home takes it out of the share for Bob; removing Bob drops the share for him.
+  await page.reload();
+  await page.click(`[data-home="${secretId}"]`);
+  await page.waitForFunction(() => document.querySelector('[data-share] ul').textContent.includes('none yet'));
+  assert.doesNotMatch(run('ls'), /Family Netflix/);
+  page.on('dialog', (d) => d.accept());
+  await page.click(`[data-remove="${bob}"]`);
+  await page.waitForFunction((b) => !document.querySelector('[data-share]').textContent.includes(b), bob);
+  assert.match(run('share'), /No shares yet/);
+  await page.close();
+  await popup.close();
 });

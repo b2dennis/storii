@@ -15,3 +15,5 @@ body.page .row { display: flex; gap: 8px; flex-wrap: wrap; }
 body.page .lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 body.page .lines li { border-top: 1px solid var(--line); padding-top: 6px; }
 body.page input[type=file] { padding: 10px; }
+body.page .col { display: flex; flex-direction: column; gap: 8px; }
+body.page .col[hidden] { display: none; }

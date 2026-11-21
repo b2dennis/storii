@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -74,6 +75,18 @@ func New(db *store.Store, cfg Config, log *slog.Logger) http.Handler {
 	mux.HandleFunc("DELETE /api/v2/sessions/{id}", s.authed(s.deleteSession))
 	mux.HandleFunc("GET /api/v2/sync", s.authed(s.sync))
 	mux.HandleFunc("POST /api/v2/items", s.authed(s.writeItems))
+	mux.HandleFunc("GET /api/v2/trash", s.authed(s.trash))
+	mux.HandleFunc("DELETE /api/v2/trash", s.authed(s.emptyTrash))
+	mux.HandleFunc("PUT /api/v2/account/keys", s.authed(s.setShareKeys))
+	mux.HandleFunc("GET /api/v2/users/{username}/key", s.authed(s.userKey))
+	mux.HandleFunc("GET /api/v2/shares", s.authed(s.shares))
+	mux.HandleFunc("POST /api/v2/shares", s.authed(s.createShare))
+	mux.HandleFunc("PUT /api/v2/shares/{id}", s.authed(s.renameShare))
+	mux.HandleFunc("DELETE /api/v2/shares/{id}", s.authed(s.deleteShare))
+	mux.HandleFunc("PUT /api/v2/shares/{id}/members/{username}", s.authed(s.addShareMember))
+	mux.HandleFunc("DELETE /api/v2/shares/{id}/members/{username}", s.authed(s.removeShareMember))
+	mux.HandleFunc("GET /api/v2/shares/{id}/sync", s.authed(s.shareSync))
+	mux.HandleFunc("POST /api/v2/shares/{id}/items", s.authed(s.writeShareItems))
 	go s.janitor()
 	return s.cors(mux)
 }
@@ -99,6 +112,12 @@ func (s *Server) janitor() {
 	for range time.Tick(time.Hour) {
 		if err := s.db.PurgeExpiredSessions(context.Background()); err != nil {
 			s.log.Warn("purge sessions", "err", err)
+		}
+		if err := s.db.PurgeTrash(context.Background()); err != nil {
+			s.log.Warn("purge trash", "err", err)
+		}
+		if err := s.db.PurgeShareTrash(context.Background()); err != nil {
+			s.log.Warn("purge share trash", "err", err)
 		}
 		s.mu.Lock()
 		for ip, l := range s.limiters {
@@ -256,10 +275,13 @@ type accountResp struct {
 	WrappedKey string    `json:"wrapped_key"`
 	Revision   int64     `json:"revision"`
 	CreatedAt  time.Time `json:"created_at"`
+	// Sharing keys, once a client has set them up.
+	PublicKey        string `json:"public_key,omitempty"`
+	SealedPrivateKey string `json:"sealed_private_key,omitempty"`
 }
 
 func toAccountResp(a store.Account) accountResp {
-	return accountResp{a.Username, a.KDF, a.WrappedKey, a.Revision, a.CreatedAt}
+	return accountResp{a.Username, a.KDF, a.WrappedKey, a.Revision, a.CreatedAt, a.PublicKey, a.SealedPrivateKey}
 }
 
 type sessionResp struct {
@@ -483,6 +505,44 @@ func (s *Server) sync(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"revision": rev, "items": items})
 }
 
+// trash lists deleted items that can be restored: a client puts one back by writing its data under the same id.
+func (s *Server) trash(w http.ResponseWriter, r *http.Request) {
+	items, err := s.db.Trash(r.Context(), accountID(r))
+	if err != nil {
+		s.internal(w, r, err)
+		return
+	}
+	if items == nil {
+		items = []store.TrashItem{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "days": store.TrashDays})
+}
+
+// emptyTrash forgets deleted items for good: {"ids": [...]}, or all of them without a body or ids.
+func (s *Server) emptyTrash(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	ids := []string{}
+	for _, raw := range req.IDs {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "item ids must be UUIDs")
+			return
+		}
+		ids = append(ids, id.String())
+	}
+	if err := s.db.EmptyTrash(r.Context(), accountID(r), ids); err != nil {
+		s.internal(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) writeItems(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Writes []store.Write `json:"writes"`
@@ -490,33 +550,9 @@ func (s *Server) writeItems(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	if len(req.Writes) == 0 || len(req.Writes) > maxBatch {
-		writeErr(w, http.StatusBadRequest, "send 1 to 2000 writes")
+	if msg := checkWrites(req.Writes); msg != "" {
+		writeErr(w, http.StatusBadRequest, msg)
 		return
-	}
-	seen := map[string]bool{}
-	for i, wr := range req.Writes {
-		id, err := uuid.Parse(wr.ID)
-		switch {
-		case err != nil:
-			writeErr(w, http.StatusBadRequest, "item ids must be UUIDs")
-			return
-		case seen[id.String()]:
-			writeErr(w, http.StatusBadRequest, "an item appears twice in one batch")
-			return
-		case !wr.Delete && (wr.Data == "" || len(wr.Data) > maxItemBytes):
-			writeErr(w, http.StatusBadRequest, "item data must be 1 byte to 256 KiB")
-			return
-		case wr.Delete && wr.Data != "":
-			writeErr(w, http.StatusBadRequest, "a delete carries no data")
-			return
-		}
-		seen[id.String()] = true
-		req.Writes[i].ID = id.String()
-		if _, err := base64.StdEncoding.DecodeString(wr.Data); err != nil {
-			writeErr(w, http.StatusBadRequest, "item data must be base64")
-			return
-		}
 	}
 	rev, err := s.db.Apply(r.Context(), accountID(r), req.Writes)
 	if err != nil {
@@ -524,4 +560,31 @@ func (s *Server) writeItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"revision": rev})
+}
+
+// checkWrites validates a batch of writes and normalizes their ids; it returns what's wrong, or "".
+func checkWrites(writes []store.Write) string {
+	if len(writes) == 0 || len(writes) > maxBatch {
+		return "send 1 to 2000 writes"
+	}
+	seen := map[string]bool{}
+	for i, wr := range writes {
+		id, err := uuid.Parse(wr.ID)
+		switch {
+		case err != nil:
+			return "item ids must be UUIDs"
+		case seen[id.String()]:
+			return "an item appears twice in one batch"
+		case !wr.Delete && (wr.Data == "" || len(wr.Data) > maxItemBytes):
+			return "item data must be 1 byte to 256 KiB"
+		case wr.Delete && wr.Data != "":
+			return "a delete carries no data"
+		}
+		seen[id.String()] = true
+		writes[i].ID = id.String()
+		if _, err := base64.StdEncoding.DecodeString(wr.Data); err != nil {
+			return "item data must be base64"
+		}
+	}
+	return ""
 }

@@ -1,3 +1,7 @@
+# Idea list (2026-11-20): 1 password history DONE, 2 password health DONE, 3 trash/undo DONE, 4 encrypted backups DONE
+# (all clients; iOS UI not compiled, Mac asleep), 5 sharing between users DONE (Go/CLI, extension, Android, StoriiCore
+# tested live; iOS SwiftUI views not compiled, Mac away). Not done: key rotation on member removal, trash for shared items.
+
 # Fix first: Windows tray can't unlock (reported 2026-11-07) — FIX MADE 2026-11-12, unverified on Windows
 
 Cause found: popup window lacked WS_CLIPCHILDREN, so its repaint drew the field box over the password edit.

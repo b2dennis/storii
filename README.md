@@ -33,6 +33,16 @@ CLI covers the terminal.
   | Windows tray app                             | a hotkey search (Ctrl+Shift+Space) that copies (cards: number, Shift+Enter expiry, Ctrl+Enter CVC); kept out of clipboard history | no            |
   | CLI (Linux, macOS, Windows)                  | copies to the clipboard (cleared after 30 s) or prints          | `storii add`            |
 
+- **Password history**: changing a password keeps the previous ones (up to 10, with dates) on the item.
+- **Password health**: reused and weak passwords, and an optional breach check against Have I Been Pwned that only
+  sends the first 5 characters of each password's SHA-1 hash (k-anonymity, with padding).
+- **Trash**: deleted secrets and contexts stay restorable for 30 days (`storii trash`, Settings → Recently deleted).
+- **Encrypted backups**: one file with every item, sealed with a backup password; restoring adds what's missing,
+  under the same ids. Works without the server (`storii backup FILE`, `storii restore FILE`, or Backups in the
+  extension and apps). Format in [docs/CRYPTO.md](docs/CRYPTO.md#backups).
+- **Sharing**: put secrets in a share (family, a team) and add people after comparing their key fingerprint. Everyone
+  in a share reads and edits its secrets; the server only sees ciphertext (`storii share`, Settings → Shares, or
+  Sharing… in the extension). Design in [docs/CRYPTO.md](docs/CRYPTO.md#sharing).
 - **Offline**: every client keeps an encrypted copy and unlocks without the server. Changes sync when online.
 - **Moving from v1**: `storii migrate` brings over your old passwords ([docs/MIGRATING.md](docs/MIGRATING.md)).
 - **Importing**: logins from browser exports (Zen, Firefox, Chrome, Edge, Brave, Safari, Google Password Manager),

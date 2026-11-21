@@ -1,0 +1,59 @@
+{
+  "comment": "A storii backup (password below) holding these items; every client must open it. The file comes from `go test ./internal/vault -update`.",
+  "password": "backup horse 42",
+  "items": {
+    "6f0c7c2e-0a3e-4c55-9b7e-2d1c1f0a0001": {
+      "kind": "context",
+      "name": "Example",
+      "type": "website",
+      "urls": [
+        "https://example.com"
+      ],
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z"
+    },
+    "6f0c7c2e-0a3e-4c55-9b7e-2d1c1f0a0002": {
+      "kind": "secret",
+      "type": "password",
+      "name": "Example login",
+      "fields": {
+        "username": "me@example.com",
+        "password": "n3w-pässword"
+      },
+      "contexts": [
+        "6f0c7c2e-0a3e-4c55-9b7e-2d1c1f0a0001"
+      ],
+      "history": [
+        {
+          "field": "password",
+          "value": "old",
+          "changed_at": "2026-03-01T00:00:00Z"
+        }
+      ],
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-03-01T00:00:00Z"
+    },
+    "6f0c7c2e-0a3e-4c55-9b7e-2d1c1f0a0003": {
+      "kind": "secret",
+      "type": "note",
+      "name": "Wifi 📶",
+      "fields": {
+        "note": "line 1\nline 2"
+      },
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z"
+    }
+  },
+  "file": {
+    "storii_backup": 1,
+    "exported_at": "2026-11-20T12:00:00Z",
+    "kdf": {
+      "alg": "argon2id",
+      "salt": "YmFja3VwLXNhbHQtMDAwMQ==",
+      "iterations": 1,
+      "memory_kib": 16384,
+      "parallelism": 1
+    },
+    "data": "AQcHBwcHBwcHBwcHBxQPzK0n7za3pJfbx1jL2BYOhdqgKYIsvbd1dzNLE6GVBxxtCh248KD3IhlzsGowJJ8gbAxC3PC9vp12LTcFrBefmlRmLPzaRkUPQL8O2ew7q7o0dMAI/RnmiOt8XzjLa9+c73SaAp+SwuZHgRrmrQ7AeysV2PGp11csiseiPe8Hk4Yn1MNq073+z8iCNC3Yr40wcQGdvjkX/SF3OAo/znNJCs9coJm4Vma3x2dPFc2loFxflv6Gjd/IsJIkQL9ZWulbdb+Z0kow4GLcyHMrl4sdlFwIpAGAj4jvOR4uneRPXe5kACFQRKX2J2ucKX13rU31oJSejDyNSIHzRqdfPcO1IhGrWj3Dm/cFbzMUNmoJMgmHTBbWTTD37NtfsrMbN2dqA+TnkwJdIn71NSYuX/AKPf8GpF6n/gA4pEmwQ3pOazniJNqAZnS5PoVIMEHqT3Me+unbE9VMkjd6rYBDgknDs24de+Cx0GzsQoEUiVYsQBXmNSzh3PgkuL9PhMTxti/Jr5L0sJl1mtE1Oheo8D8es9cmm6M7JFBUHQNgksMxW03/UEyu8ekwm7pGdB0g5anpN5b8ZiiVv1+hG0u5hFmo4sEJXpTR7AMij38OHKrDGSV0ypkPGJEkft0Gs2sxobxN2HVU8RqkacsLtVh74nm1wmiRU0mBUEgkVxKsJsermA/JbyyfpDqRgSl8ob4Vpn2K+v7XPXUMB3YUAc/SKJfn2T1h/EX5pRuE0dtSvJv1G9zgxNllFQw2w3WJ0ohJuEo6rYJh6kXFPrDmc0xm0/621pF6aDJylOb/GVLMhUOHVGjtAUjCQko2TJSZsr8p1EdfRkG+YESA5kjj9JSg5o854oQf9EWYlIw9KdH62hyq7SKOJaay9bPD8Qzzq4bn5JJDlpCoUn6PLWiATmq/C0Vk2hrjmfIghjgEQ2Kh9g2TKjFtOTg/wM49mITtDX8wOvKcUoy9J9QiFpxHD/ZACie9H0O0UpS5Rn2w2Ep3/WUylVHnQqluMrGAtpLkoywUM9XjRmGt1hUxLDyqPEnN5/u8M5kHRrk="
+  }
+}

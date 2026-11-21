@@ -208,7 +208,7 @@ paths:
                     properties:
                       id: { type: string, format: uuid, description: Chosen by the client }
                       data: { $ref: "#/components/schemas/Envelope" }
-                      delete: { type: boolean, description: Set to delete; then data must be absent }
+                      delete: { type: boolean, description: Set to delete; then data must be absent. The server keeps the last data in the trash (see /api/v2/trash); writing data under the id again restores it. }
       responses:
         "200":
           description: OK
@@ -218,6 +218,184 @@ paths:
                 type: object
                 properties: { revision: { type: integer, format: int64 } }
         "400": { $ref: "#/components/responses/Error" }
+  /api/v2/trash:
+    get:
+      summary: Deleted items the server still keeps, newest first
+      description: >-
+        A delete keeps the item's last data for `days` days (deleting again keeps the first deletion time). Restoring is
+        an ordinary write of that data under the same id, which takes the item out of the trash.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, days]
+                properties:
+                  days: { type: integer, description: How long deleted items are kept }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, data, deleted_at]
+                      properties:
+                        id: { type: string, format: uuid }
+                        data: { $ref: "#/components/schemas/Envelope" }
+                        deleted_at: { type: string, format: date-time }
+    delete:
+      summary: Forgets deleted items for good
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids: { type: array, items: { type: string, format: uuid }, description: Empty or absent empties the whole trash }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+  /api/v2/account/keys:
+    put:
+      summary: Sets the account's sharing key pair, once
+      description: Repeating the same keys is a no-op; different keys get 409 (shares are wrapped for the first ones).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [public_key, sealed_private_key]
+              properties:
+                public_key: { type: string, format: byte, description: X25519 public key (32 bytes), base64 }
+                sealed_private_key: { $ref: "#/components/schemas/Envelope" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Account" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v2/users/{username}/key:
+    get:
+      summary: Another user's public sharing key
+      description: Compare its fingerprint with the user before adding them. 404 for unknown users and users without keys.
+      parameters: [{ name: username, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { username: { type: string }, public_key: { type: string, format: byte } }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v2/shares:
+    get:
+      summary: The shares this account is in, with the share key wrapped for it
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { shares: { type: array, items: { $ref: "#/components/schemas/Share" } } }
+    post:
+      summary: Creates a share owned by this account (which needs sharing keys)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, meta, wrapped_key]
+              properties:
+                id: { type: string, format: uuid, description: Chosen by the client }
+                meta: { $ref: "#/components/schemas/Envelope" }
+                wrapped_key: { $ref: "#/components/schemas/WrappedShareKey" }
+      responses:
+        "201": { description: Created }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v2/shares/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    put:
+      summary: Renames a share (new meta envelope); owner only
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [meta], properties: { meta: { $ref: "#/components/schemas/Envelope" } } } } }
+      responses:
+        "204": { description: Done }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      summary: Deletes the share with its items (owner), or leaves it (members)
+      responses:
+        "204": { description: Done }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v2/shares/{id}/members/{username}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: username, in: path, required: true, schema: { type: string } }
+    put:
+      summary: Adds a member (or replaces their wrapped key); owner only
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [wrapped_key], properties: { wrapped_key: { $ref: "#/components/schemas/WrappedShareKey" } } } } }
+      responses:
+        "204": { description: Done }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      summary: Removes a member; the owner removes anyone else, members remove themselves
+      description: The share key isn't rotated; a removed member keeps whatever they saw.
+      responses:
+        "204": { description: Done }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v2/shares/{id}/sync:
+    get:
+      summary: Share items changed since a share revision (like /api/v2/sync); any member
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: since, in: query, schema: { type: integer, format: int64, default: 0 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  revision: { type: integer, format: int64 }
+                  items: { type: array, items: { $ref: "#/components/schemas/RemoteItem" } }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v2/shares/{id}/items:
+    post:
+      summary: Writes share items, same body and limits as /api/v2/items; any member
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [writes]
+              properties:
+                writes:
+                  type: array
+                  minItems: 1
+                  maxItems: 2000
+                  items:
+                    type: object
+                    required: [id]
+                    properties:
+                      id: { type: string, format: uuid }
+                      data: { $ref: "#/components/schemas/Envelope" }
+                      delete: { type: boolean }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, properties: { revision: { type: integer, format: int64 } } } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
 components:
   securitySchemes:
     bearer:
@@ -258,6 +436,8 @@ components:
         wrapped_key: { $ref: "#/components/schemas/Envelope" }
         revision: { type: integer, format: int64 }
         created_at: { type: string, format: date-time }
+        public_key: { type: string, format: byte, description: X25519 sharing key, once set up }
+        sealed_private_key: { $ref: "#/components/schemas/Envelope" }
     Session:
       type: object
       properties:
@@ -272,3 +452,23 @@ components:
         deleted: { type: boolean }
         revision: { type: integer, format: int64 }
         updated_at: { type: string, format: date-time }
+    WrappedShareKey:
+      type: string
+      description: base64(ephemeral X25519 public key) "." Envelope, see docs/CRYPTO.md#sharing
+    Share:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        owner: { type: string }
+        meta: { $ref: "#/components/schemas/Envelope" }
+        revision: { type: integer, format: int64 }
+        wrapped_key: { $ref: "#/components/schemas/WrappedShareKey" }
+        members:
+          type: array
+          items:
+            type: object
+            properties:
+              username: { type: string }
+              public_key: { type: string, format: byte }
+              owner: { type: boolean }
+              added_at: { type: string, format: date-time }

@@ -152,7 +152,7 @@ fun EditScreen(nav: NavController, id: String?, initialType: String?) {
         busy = true
         scope.launch {
             try {
-                val changes = newContexts.filter { it.first in contexts }.map { Vault.Change.Put(it.first, it.second) } +
+                val changes = newContexts.filter { it.first in contexts }.map { Vault.Change.Put(it.first, it.second, share = id?.let { vault.shareOf(it)?.id }) } +
                     Vault.Change.Put(id, item)
                 val ids = vault.write(changes)
                 nav.popBackStack()
@@ -257,6 +257,7 @@ fun EditScreen(nav: NavController, id: String?, initialType: String?) {
     }
     if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false },
         title = { Text("Delete ${existing?.name}?") },
+        text = { Text("It stays in Settings → Recently deleted for 30 days.") },
         confirmButton = {
             TextButton(onClick = {
                 scope.launch {

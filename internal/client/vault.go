@@ -26,6 +26,10 @@ type State struct {
 	WrappedKey string                `json:"wrapped_key"`
 	Revision   int64                 `json:"revision"`
 	Items      map[string]RemoteItem `json:"items"`
+	// Sharing: the account's key pair (private key sealed with the vault key) and the shares it's in.
+	PublicKey        string                 `json:"public_key,omitempty"`
+	SealedPrivateKey string                 `json:"sealed_private_key,omitempty"`
+	Shares           map[string]*ShareState `json:"shares,omitempty"`
 }
 
 func LoadState(path string) (*State, error) {
@@ -65,6 +69,10 @@ func (s *State) Pull(ctx context.Context) error {
 	}
 	// Another device changed the master password: the wrapped key and KDF follow.
 	s.KDF, s.WrappedKey = acct.KDF, acct.WrappedKey
+	s.PublicKey, s.SealedPrivateKey = acct.PublicKey, acct.SealedPrivateKey
+	if err := s.pullShares(ctx); err != nil {
+		return err
+	}
 	rev, items, err := s.API().Sync(ctx, s.Revision)
 	if err != nil {
 		return err
@@ -144,6 +152,11 @@ type Vault struct {
 	Items map[string]vault.Item
 	// Undecryptable holds ids whose data didn't decrypt (written by a broken client, or tampered with).
 	Undecryptable []string
+	// Sharing: ItemShare maps the ids of items kept in a share to that share's id (personal items aren't in it).
+	ItemShare map[string]string
+	Shares    map[string]Share
+	priv      []byte
+	shareKeys map[string][]byte
 }
 
 // Unlock derives the keys from the master password and decrypts the local copy.
@@ -179,6 +192,7 @@ func (v *Vault) decryptAll() {
 		}
 		v.Undecryptable = append(v.Undecryptable, id)
 	}
+	v.decryptShares()
 }
 
 // Refresh pulls from the server and re-decrypts.
@@ -198,8 +212,18 @@ func (v *Vault) Refresh(ctx context.Context) error {
 
 func (v *Vault) AuthKey() string { return v.keys.AuthKey() }
 
-// Put encrypts and uploads items (new ones get an id when theirs is empty) and returns their ids.
+// Put encrypts and uploads items (new ones get an id when theirs is empty) and returns their ids. Existing items stay
+// where they are (the personal vault or their share); new ones go into the personal vault.
 func (v *Vault) Put(ctx context.Context, items map[string]vault.Item) ([]string, error) {
+	return v.PutIn(ctx, "", items)
+}
+
+// PutIn is Put with new items going into the share shareID ("" is the personal vault).
+func (v *Vault) PutIn(ctx context.Context, shareID string, items map[string]vault.Item) ([]string, error) {
+	if shareID != "" && v.shareKeys[shareID] == nil {
+		return nil, errors.New("no such share")
+	}
+	place := map[string]string{}
 	now := time.Now().UTC().Truncate(time.Second)
 	writes := make([]Write, 0, len(items))
 	ids := make([]string, 0, len(items))
@@ -212,6 +236,9 @@ func (v *Vault) Put(ctx context.Context, items map[string]vault.Item) ([]string,
 			it.CreatedAt = now
 		}
 		it.UpdatedAt = now
+		if prev, ok := v.Items[id]; ok {
+			it = vault.WithHistory(prev, it, now)
+		}
 		if err := it.Validate(); err != nil {
 			return nil, err
 		}
@@ -219,7 +246,11 @@ func (v *Vault) Put(ctx context.Context, items map[string]vault.Item) ([]string,
 		if err != nil {
 			return nil, err
 		}
-		data, err := vault.EncryptItem(v.key, id, pt)
+		place[id] = shareID
+		if _, ok := v.Items[id]; ok {
+			place[id] = v.ItemShare[id]
+		}
+		data, err := v.encrypt(place[id], id, pt)
 		if err != nil {
 			return nil, err
 		}
@@ -227,15 +258,8 @@ func (v *Vault) Put(ctx context.Context, items map[string]vault.Item) ([]string,
 		ids = append(ids, id)
 		plain[id] = it
 	}
-	for chunk := range slices.Chunk(writes, 1000) {
-		rev, err := v.state.API().Write(ctx, chunk)
-		if err != nil {
-			return nil, err
-		}
-		for _, w := range chunk {
-			v.state.Items[w.ID] = RemoteItem{ID: w.ID, Data: w.Data, Revision: rev}
-			v.Items[w.ID] = plain[w.ID]
-		}
+	if err := v.writeTo(ctx, writes, plain, func(id string) string { return place[id] }); err != nil {
+		return nil, err
 	}
 	return ids, nil
 }
@@ -270,20 +294,11 @@ func (v *Vault) Delete(ctx context.Context, ids ...string) error {
 	}
 	// The server takes at most 2000 writes per batch and each id once.
 	ids = slices.Compact(slices.Sorted(slices.Values(ids)))
-	for chunk := range slices.Chunk(ids, 1000) {
-		writes := make([]Write, len(chunk))
-		for i, id := range chunk {
-			writes[i] = Write{ID: id, Delete: true}
-		}
-		if _, err := v.state.API().Write(ctx, writes); err != nil {
-			return err
-		}
-		for _, id := range chunk {
-			delete(v.state.Items, id)
-			delete(v.Items, id)
-		}
+	writes := make([]Write, len(ids))
+	for i, id := range ids {
+		writes[i] = Write{ID: id, Delete: true}
 	}
-	return nil
+	return v.write(ctx, writes, nil)
 }
 
 // Entry is an item with its id.
@@ -381,6 +396,15 @@ func (s *State) Clone() *State {
 	c.Items = make(map[string]RemoteItem, len(s.Items))
 	for k, v := range s.Items {
 		c.Items[k] = v
+	}
+	c.Shares = make(map[string]*ShareState, len(s.Shares))
+	for k, sh := range s.Shares {
+		x := *sh
+		x.Items = make(map[string]RemoteItem, len(sh.Items))
+		for id, it := range sh.Items {
+			x.Items[id] = it
+		}
+		c.Shares[k] = &x
 	}
 	return &c
 }

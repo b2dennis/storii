@@ -37,6 +37,10 @@ import sh.base2.storii.vault
 @Serializable data object ContextsRoute
 @Serializable data class ContextEditRoute(val id: String? = null)
 @Serializable data object SettingsRoute
+@Serializable data object HealthRoute
+@Serializable data object TrashRoute
+@Serializable data object BackupsRoute
+@Serializable data object SharingRoute
 @Serializable data object ScanRoute
 @Serializable data class ImportRoute(val shared: String? = null)
 
@@ -104,6 +108,10 @@ private fun VaultNav(activity: FragmentActivity) {
         composable<ContextsRoute> { ContextsScreen(nav) }
         composable<ContextEditRoute> { ContextEditScreen(nav, it.toRoute<ContextEditRoute>().id) }
         composable<SettingsRoute> { SettingsScreen(nav, activity) }
+        composable<HealthRoute> { HealthScreen(nav) }
+        composable<TrashRoute> { TrashScreen(nav) }
+        composable<BackupsRoute> { BackupsScreen(nav) }
+        composable<SharingRoute> { SharingScreen(nav) }
         composable<ScanRoute> { ScanScreen(nav) }
         composable<ImportRoute> { ImportScreen(nav, it.toRoute<ImportRoute>().shared) }
     }

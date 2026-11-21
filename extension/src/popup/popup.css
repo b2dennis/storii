@@ -132,3 +132,7 @@ button:disabled { opacity: .5; cursor: default; }
 .tabs { display: flex; gap: 4px; padding: 8px 12px 0; }
 .tabs button { flex: 1; padding: 5px; font-size: 12px; }
 .tabs button.on { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+
+details.history { margin-top: 10px; }
+details.history summary { cursor: pointer; padding: 4px 0; }
+.item.trashed { cursor: default; }

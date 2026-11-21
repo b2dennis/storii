@@ -65,6 +65,9 @@ type Account struct {
 	WrappedKey string
 	Revision   int64
 	CreatedAt  time.Time
+	// For sharing; empty until a client sets them up.
+	PublicKey        string
+	SealedPrivateKey string
 }
 
 func Hash(b []byte) []byte { h := sha256.Sum256(b); return h[:] }
@@ -81,12 +84,12 @@ func (s *Store) CreateAccount(ctx context.Context, username string, kdf vault.KD
 	return a, err
 }
 
-const accountCols = `id, username, kdf, auth_hash, wrapped_key, revision, created_at`
+const accountCols = `id, username, kdf, auth_hash, wrapped_key, revision, created_at, COALESCE(public_key, ''), COALESCE(sealed_private_key, '')`
 
 func scanAccount(row pgx.Row) (Account, error) {
 	var a Account
 	var kdf []byte
-	err := row.Scan(&a.ID, &a.Username, &kdf, &a.AuthHash, &a.WrappedKey, &a.Revision, &a.CreatedAt)
+	err := row.Scan(&a.ID, &a.Username, &kdf, &a.AuthHash, &a.WrappedKey, &a.Revision, &a.CreatedAt, &a.PublicKey, &a.SealedPrivateKey)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -237,17 +240,66 @@ func (s *Store) Apply(ctx context.Context, accountID int64, writes []Write) (int
 			if !w.Delete {
 				data = &w.Data
 			}
+			// A delete moves the last ciphertext to the trash (a second delete keeps the first one's time); a put
+			// empties it, which is also how an item is restored.
 			batch.Queue(`INSERT INTO items (account_id, id, data, revision, updated_at) VALUES ($1, $2, $3, $4, now())
 				ON CONFLICT (account_id, id) DO UPDATE SET data = EXCLUDED.data, revision = EXCLUDED.revision,
-				updated_at = now()`, accountID, w.ID, data, rev)
+				updated_at = now(),
+				deleted_data = CASE WHEN EXCLUDED.data IS NULL THEN COALESCE(items.data, items.deleted_data) END,
+				deleted_at = CASE WHEN EXCLUDED.data IS NULL THEN
+					CASE WHEN items.data IS NOT NULL THEN now() ELSE items.deleted_at END END`, accountID, w.ID, data, rev)
 		}
 		return tx.SendBatch(ctx, batch).Close()
 	})
 	return rev, err
 }
 
+// TrashDays is how long deleted items can be restored.
+const TrashDays = 30
+
+// TrashItem is a deleted item's last ciphertext.
+type TrashItem struct {
+	ID        string    `json:"id"`
+	Data      string    `json:"data"`
+	DeletedAt time.Time `json:"deleted_at"`
+}
+
+// Trash lists the account's deleted items that can still be restored, newest first.
+func (s *Store) Trash(ctx context.Context, accountID int64) ([]TrashItem, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id::text, deleted_data, deleted_at FROM items
+		WHERE account_id = $1 AND data IS NULL AND deleted_data IS NOT NULL AND deleted_at > now() - make_interval(days => $2)
+		ORDER BY deleted_at DESC, id`, accountID, TrashDays)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (TrashItem, error) {
+		var t TrashItem
+		err := r.Scan(&t.ID, &t.Data, &t.DeletedAt)
+		return t, err
+	})
+}
+
+// EmptyTrash forgets deleted items for good: the given ids, or all of them when ids is empty.
+func (s *Store) EmptyTrash(ctx context.Context, accountID int64, ids []string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE items SET deleted_data = NULL, deleted_at = NULL
+		WHERE account_id = $1 AND deleted_at IS NOT NULL AND (cardinality($2::uuid[]) = 0 OR id = ANY($2::uuid[]))`, accountID, ids)
+	return err
+}
+
+// PurgeTrash forgets items deleted more than TrashDays ago.
+func (s *Store) PurgeTrash(ctx context.Context) error {
+	_, err := s.pool.Exec(ctx, `UPDATE items SET deleted_data = NULL, deleted_at = NULL
+		WHERE deleted_at IS NOT NULL AND deleted_at <= now() - make_interval(days => $1)`, TrashDays)
+	return err
+}
+
 func (s *Store) ItemCount(ctx context.Context, accountID int64) (int, error) {
 	var n int
 	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM items WHERE account_id = $1 AND data IS NOT NULL`, accountID).Scan(&n)
 	return n, err
+}
+
+func isDuplicate(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }

@@ -76,8 +76,18 @@ Done and verified:
   - clearing the clipboard after 30 s;
   - locking on suspend, a wrong password, unlocking;
   - dark mode and the embedded manifest.
+- Password history, password health, trash and encrypted backups (2026-11-20): Go tests (server lifecycle, backup
+  vector `testdata/backup.json` checked by Go, JS, Kotlin and Swift); the CLI against the dev server; extension unit
+  tests and Chromium e2e (health with a stubbed HIBP, trash restore, backup save and restore); Android unit tests and
+  build; StoriiCore tests plus the live round trip (trash, backup restore).
+- Sharing between users (2026-11-20): X25519 vectors `testdata/sharing.json` checked by Go, JS, Kotlin and Swift; server
+  tests (members, access, revisions); the CLI against the dev server; the extension's Sharing page in a Chromium e2e
+  with a CLI user (fingerprint check, move in, edits both ways, move home, remove); Android on the emulator with a CLI
+  user (create, add, move both ways); StoriiCore's live round trip with two accounts.
 
 Not verified:
+- The iOS/macOS screens for history, health, trash, backups and sharing: the Mac was asleep, so they haven't been compiled.
+- The Android history, health, trash and backup screens on a device or emulator (built and unit-tested only).
 - A real Authy GDPR export: its exact shape is inferred from the Authy API and tools; the importer finds tokens in
   any JSON or CSV with those fields.
 - Live QR scanning by the camera in a release build (the emulator's camera couldn't be aimed); decoding images and

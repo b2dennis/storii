@@ -131,6 +131,26 @@ fun SettingsScreen(nav: NavController, activity: FragmentActivity) {
             }
             HorizontalDivider()
 
+            Text("Password health", style = MaterialTheme.typography.titleMedium)
+            Text("Find reused and weak passwords, and check which ones turned up in data breaches.", style = MaterialTheme.typography.bodyMedium)
+            OutlinedButton(onClick = { nav.navigate(HealthRoute) }) { Text("Check passwords") }
+            HorizontalDivider()
+
+            Text("Recently deleted", style = MaterialTheme.typography.titleMedium)
+            Text("Deleted secrets and contexts stay in the trash for 30 days.", style = MaterialTheme.typography.bodyMedium)
+            OutlinedButton(onClick = { nav.navigate(TrashRoute) }) { Text("Open the trash") }
+            HorizontalDivider()
+
+            Text("Sharing", style = MaterialTheme.typography.titleMedium)
+            Text("Share some secrets with family or a team. Everyone in a share sees and changes them.", style = MaterialTheme.typography.bodyMedium)
+            OutlinedButton(onClick = { nav.navigate(SharingRoute) }) { Text("Shares") }
+            HorizontalDivider()
+
+            Text("Backups", style = MaterialTheme.typography.titleMedium)
+            Text("Save all your secrets to an encrypted file, or restore one.", style = MaterialTheme.typography.bodyMedium)
+            OutlinedButton(onClick = { nav.navigate(BackupsRoute) }) { Text("Backups") }
+            HorizontalDivider()
+
             Text("Import", style = MaterialTheme.typography.titleMedium)
             Text("Bring your logins over from Google Password Manager, Chrome, Firefox, Bitwarden or 1Password, and your 2FA codes from Authy.",
                 style = MaterialTheme.typography.bodyMedium)

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sharing · storii</title>
+  <link rel="stylesheet" href="../popup/popup.css">
+  <link rel="stylesheet" href="../import/import.css">
+</head>
+<body class="page">
+  <main>
+    <h1>Sharing</h1>
+    <p class="muted">A share is a small vault of its own. Everyone in it can see and change its secrets; only the owner
+      adds and removes people. The server can’t read shares either.</p>
+    <p class="muted small">Your key fingerprint: <b id="fp">…</b>. When someone adds you, they compare it with what
+      their storii shows.</p>
+
+    <section id="locked" hidden>
+      <p class="err">storii is locked. Unlock it, then come back to this tab.</p>
+      <button id="unlock" class="primary">Unlock storii</button>
+    </section>
+
+    <section id="main">
+      <form id="create" class="row">
+        <input id="newName" placeholder="New share, e.g. Family" required>
+        <button class="primary" type="submit">Create share</button>
+      </form>
+      <div class="err" id="err" role="alert"></div>
+      <div id="shares"></div>
+    </section>
+  </main>
+  <script type="module" src="sharing.js"></script>
+</body>
+</html>

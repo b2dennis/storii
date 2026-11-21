@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -33,7 +34,9 @@ Account
 
 Secrets (types: password, totp, api_key, note, card)
   storii ls [QUERY] [--type T] [--context NAME] [--site HOST]
-  storii show NAME [--reveal]
+  storii show NAME [--reveal]      details, with earlier passwords and keys
+  storii health [--breaches]       weak and reused passwords; --breaches also asks Have I Been Pwned
+                                   (only the first 5 characters of each password's SHA-1 are sent)
   storii get NAME [--print]        copy the password / current 2FA code / API key / note
   storii user NAME [--print]       copy the username
   storii totp NAME                 print the current 2FA code
@@ -44,7 +47,9 @@ Secrets (types: password, totp, api_key, note, card)
   storii add card NAME [--holder NAME] [--expiry MM/YY]                  (prompts for the number and CVC)
   storii edit NAME [--name N] [--user U] [--password] [--gen] [--notes TEXT] [--field K=V]...
                    [--context C]... [--unlink C]...
-  storii rm NAME [--yes]
+  storii rm NAME [--yes]           moves it to the trash
+  storii trash                     deleted secrets and contexts, kept for 30 days
+  storii trash restore NAME...     put them back       storii trash empty [NAME...] [--yes]   forget them for good
   storii gen [LENGTH] [--no-symbols]
 
 Contexts (apps and websites; a secret can belong to several)
@@ -62,6 +67,20 @@ Importing from other password managers
                                     logins, 2FA codes, cards and passkeys from a Bitwarden JSON export;
                                     logins, 2FA codes and cards from a 1Password .1pux export.
                                     Safe to run twice.
+
+Backups (encrypted with a backup password of your choice; restoring needs only the file and that password)
+  storii backup FILE [--force]     write every secret and context to FILE
+  storii restore FILE [--dry-run]  add the backup's items this vault doesn't have; ones it has are left alone
+                                   STORII_BACKUP_PASSWORD supplies the backup password non-interactively.
+
+Sharing (a share is a small vault of its own; everyone in it can read and change its items)
+  storii share                          your shares, their members, and your key fingerprint
+  storii share create NAME              storii share rename SHARE NAME
+  storii share add SHARE USER [--yes]   shows USER's key fingerprint to compare with theirs first
+  storii share remove SHARE USER        they keep anything they already copied: change those passwords
+  storii share move SHARE NAME...       move secrets (with their contexts) into a share
+  storii share unshare NAME...          move them back into your own vault
+  storii share delete SHARE [--yes]     deletes the share and its items (the owner) or leaves it (members)
 
 Moving from storii v1
   storii migrate --legacy-db POSTGRES_URL --legacy-user NAME [--dry-run] [--overwrite]
@@ -144,6 +163,13 @@ func run(ctx context.Context, args []string) error {
 		fmt.Fprintf(os.Stderr, "warning: %d items could not be decrypted\n", n)
 	}
 	defer st.Save(statePath())
+	// Every account gets a sharing key pair, so others can add it to shares.
+	if pullErr == nil && st.PublicKey == "" {
+		var ae *client.APIError
+		if err := v.SetupSharing(ctx); err != nil && !(errors.As(err, &ae) && ae.Status == http.StatusNotFound) {
+			fmt.Fprintln(os.Stderr, "warning: couldn't set up sharing:", err)
+		}
+	}
 	switch cmd {
 	case "ls":
 		return cmdList(v, rest)
@@ -161,6 +187,10 @@ func run(ctx context.Context, args []string) error {
 		return cmdRemove(ctx, v, rest)
 	case "ctx":
 		return cmdContext(ctx, v, rest)
+	case "health":
+		return cmdHealth(ctx, v, rest)
+	case "trash":
+		return cmdTrash(ctx, v, rest)
 	case "passwd":
 		return cmdPasswd(ctx, v)
 	case "sessions":
@@ -169,6 +199,12 @@ func run(ctx context.Context, args []string) error {
 		return cmdMigrate(ctx, v, rest)
 	case "import":
 		return cmdImport(ctx, v, rest)
+	case "backup":
+		return cmdBackup(v, rest)
+	case "restore":
+		return cmdRestore(ctx, v, rest)
+	case "share":
+		return cmdShare(ctx, v, rest)
 	}
 	return fmt.Errorf("unknown command %q (try storii help)", cmd)
 }
@@ -413,7 +449,173 @@ func cmdList(v *client.Vault, args []string) error {
 		if names != "" {
 			line += "  [" + names + "]"
 		}
+		if sid := v.ItemShare[e.ID]; sid != "" {
+			line += "  {shared: " + v.Shares[sid].Name + "}"
+		}
 		fmt.Println(line)
+	}
+	return nil
+}
+
+func cmdHealth(ctx context.Context, v *client.Vault, args []string) error {
+	fs := newFlags("health")
+	breaches := fs.Bool("breaches", false, "check Have I Been Pwned")
+	if _, err := parse(fs, args); err != nil {
+		return err
+	}
+	name := func(id string) string {
+		it := v.Items[id]
+		if u := it.Fields[vault.FieldUsername]; u != "" {
+			return it.Name + " (" + u + ")"
+		}
+		return it.Name
+	}
+	h := vault.CheckHealth(v.Items)
+	ok := true
+	if len(h.Reused) > 0 {
+		ok = false
+		fmt.Println("Reused passwords:")
+		for _, g := range h.Reused {
+			names := make([]string, len(g))
+			for i, id := range g {
+				names[i] = name(id)
+			}
+			fmt.Println("  " + strings.Join(names, ", "))
+		}
+	}
+	if len(h.Weak) > 0 {
+		ok = false
+		fmt.Println("Weak passwords:")
+		for _, id := range h.Weak {
+			fmt.Println("  " + name(id))
+		}
+	}
+	if *breaches {
+		byPw := map[string][]string{}
+		for id, it := range v.Items {
+			if pw := it.Fields[vault.FieldPassword]; it.Kind == vault.KindSecret && it.Type == vault.TypePassword && pw != "" {
+				byPw[pw] = append(byPw[pw], id)
+			}
+		}
+		var found []string
+		for pw, ids := range byPw {
+			n, err := client.Pwned(ctx, pw)
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				for _, id := range ids {
+					found = append(found, fmt.Sprintf("  %s: seen %d times", name(id), n))
+				}
+			}
+		}
+		slices.Sort(found)
+		if len(found) > 0 {
+			ok = false
+			fmt.Println("Found in data breaches (change these first):")
+			fmt.Println(strings.Join(found, "\n"))
+		}
+	}
+	if ok {
+		fmt.Println("No reused or weak passwords" + map[bool]string{true: ", and none found in breaches.", false: "."}[*breaches])
+	}
+	return nil
+}
+
+func cmdTrash(ctx context.Context, v *client.Vault, args []string) error {
+	fs := newFlags("trash")
+	yes := fs.Bool("yes", false, "don't ask")
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	items, days, err := v.Trash(ctx)
+	if err != nil {
+		return err
+	}
+	// pick finds trash entries by id prefix or name (exact, then substring).
+	pick := func(qs []string) ([]client.Deleted, error) {
+		var out []client.Deleted
+		for _, q := range qs {
+			var exact, part []client.Deleted
+			for _, d := range items {
+				switch {
+				case strings.HasPrefix(d.ID, q) && len(q) >= 4, strings.EqualFold(d.Name, q):
+					exact = append(exact, d)
+				case strings.Contains(strings.ToLower(d.Name), strings.ToLower(q)):
+					part = append(part, d)
+				}
+			}
+			if len(exact) == 0 {
+				exact = part
+			}
+			switch len(exact) {
+			case 0:
+				return nil, fmt.Errorf("nothing in the trash matches %q", q)
+			case 1:
+				out = append(out, exact[0])
+			default:
+				return nil, fmt.Errorf("%q matches %d deleted items; use the id from `storii trash`", q, len(exact))
+			}
+		}
+		return out, nil
+	}
+	if len(pos) == 0 {
+		if len(items) == 0 {
+			fmt.Println("The trash is empty.")
+			return nil
+		}
+		for _, d := range items {
+			label := "context"
+			if d.Kind == vault.KindSecret {
+				label = typeLabel(d.Type)
+			}
+			fmt.Printf("%s  %-9s %s  (deleted %s)\n", d.ID[:8], label, d.Name, d.DeletedAt.Local().Format("2006-01-02 15:04"))
+		}
+		fmt.Printf("Deleted items are kept for %d days.\n", days)
+		return nil
+	}
+	switch pos[0] {
+	case "restore":
+		if err := needArgs(pos[1:], 1, "storii trash restore NAME..."); err != nil {
+			return err
+		}
+		sel, err := pick(pos[1:])
+		if err != nil {
+			return err
+		}
+		if err := v.Restore(ctx, sel...); err != nil {
+			return err
+		}
+		for _, d := range sel {
+			fmt.Printf("Restored %s.\n", d.Name)
+		}
+	case "empty":
+		sel := items
+		if len(pos) > 1 {
+			if sel, err = pick(pos[1:]); err != nil {
+				return err
+			}
+		}
+		if len(sel) == 0 {
+			fmt.Println("The trash is empty.")
+			return nil
+		}
+		if !*yes && !confirm(fmt.Sprintf("Forget %d deleted item(s) for good?", len(sel))) {
+			return nil
+		}
+		var ids []string
+		if len(pos) > 1 {
+			for _, d := range sel {
+				ids = append(ids, d.ID)
+			}
+		}
+		if err := v.EmptyTrash(ctx, ids); err != nil {
+			return err
+		}
+		fmt.Printf("Forgot %d item(s).\n", len(sel))
+	default:
+		return fmt.Errorf("unknown trash command %q (restore or empty)", pos[0])
 	}
 	return nil
 }
@@ -494,6 +696,12 @@ func cmdShow(v *client.Vault, args []string) error {
 	}
 	if e.Notes != "" {
 		fmt.Printf("  notes:\n    %s\n", strings.ReplaceAll(e.Notes, "\n", "\n    "))
+	}
+	if len(e.History) > 0 {
+		fmt.Println("  earlier values:")
+		for _, h := range e.History {
+			fmt.Printf("    %s  %s: %s\n", h.ChangedAt.Local().Format(time.DateTime), h.Field, mask(h.Value))
+		}
 	}
 	fmt.Printf("  updated:  %s\n", e.UpdatedAt.Local().Format(time.DateTime))
 	return nil
@@ -607,7 +815,12 @@ func saveWithContexts(ctx context.Context, v *client.Vault, id string, secret va
 			tmp, items = append(tmp, k), append(items, it)
 		}
 		for i, it := range items {
-			newID, err := v.PutOne(ctx, "", it)
+			// New contexts of a shared secret go into its share, where every member can see them.
+			newIDs, err := v.PutIn(ctx, v.ItemShare[id], map[string]vault.Item{"": it})
+			var newID string
+			if err == nil {
+				newID = newIDs[0]
+			}
 			if err != nil {
 				return "", err
 			}
@@ -879,7 +1092,7 @@ func cmdRemove(ctx context.Context, v *client.Vault, args []string) error {
 	if err := v.Delete(ctx, e.ID); err != nil {
 		return err
 	}
-	fmt.Printf("Deleted %s.\n", e.Name)
+	fmt.Printf("Moved %s to the trash (storii trash restore to undo).\n", e.Name)
 	return nil
 }
 
@@ -986,7 +1199,7 @@ func cmdContext(ctx context.Context, v *client.Vault, args []string) error {
 		if err := v.Delete(ctx, c.ID); err != nil {
 			return err
 		}
-		fmt.Printf("Deleted context %s (its secrets are kept).\n", c.Name)
+		fmt.Printf("Moved context %s to the trash (its secrets are kept, unlinked).\n", c.Name)
 		return nil
 	case "link", "unlink":
 		if err := needArgs(pos, 2, "storii ctx "+sub+" SECRET CONTEXT"); err != nil {
@@ -1012,6 +1225,92 @@ func cmdContext(ctx context.Context, v *client.Vault, args []string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown ctx command %q", sub)
+}
+
+func backupPassword(label string, repeat bool) (string, error) {
+	if pw := os.Getenv("STORII_BACKUP_PASSWORD"); pw != "" {
+		return pw, nil
+	}
+	pw, err := promptHidden(label)
+	if err != nil || !repeat {
+		return pw, err
+	}
+	if msg := passwordProblem(pw); msg != "" {
+		return "", errors.New(strings.Replace(msg, "the master password", "the backup password", 1))
+	}
+	again, err := promptHidden("Repeat: ")
+	if err != nil {
+		return "", err
+	}
+	if again != pw {
+		return "", errors.New("the passwords don't match")
+	}
+	return pw, nil
+}
+
+func cmdBackup(v *client.Vault, args []string) error {
+	fs := newFlags("backup")
+	force := fs.Bool("force", false, "overwrite FILE")
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if err := needArgs(pos, 1, "storii backup FILE [--force]"); err != nil {
+		return err
+	}
+	if _, err := os.Stat(pos[0]); err == nil && !*force {
+		return fmt.Errorf("%s exists (--force overwrites it)", pos[0])
+	}
+	pw, err := backupPassword("Backup password: ", true)
+	if err != nil {
+		return err
+	}
+	file, err := v.Backup(pw)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(pos[0], append(file, '\n'), 0o600); err != nil {
+		return err
+	}
+	fmt.Printf("Backed up %d secrets and %d contexts to %s. Keep the backup password: without it the file can't be opened.\n",
+		len(v.List(vault.KindSecret)), len(v.List(vault.KindContext)), pos[0])
+	return nil
+}
+
+func cmdRestore(ctx context.Context, v *client.Vault, args []string) error {
+	fs := newFlags("restore")
+	dry := fs.Bool("dry-run", false, "only show what would be restored")
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if err := needArgs(pos, 1, "storii restore FILE [--dry-run]"); err != nil {
+		return err
+	}
+	file, err := os.ReadFile(pos[0])
+	if err != nil {
+		return err
+	}
+	if !vault.IsBackup(file) {
+		return fmt.Errorf("%s is not a storii backup (storii import reads other password managers' exports)", pos[0])
+	}
+	pw, err := backupPassword("Backup password: ", false)
+	if err != nil {
+		return err
+	}
+	res, err := v.RestoreBackup(ctx, pw, file, *dry)
+	if err != nil {
+		return err
+	}
+	verb := "Restored"
+	if *dry {
+		verb = "Would restore"
+	}
+	for _, e := range res.Added {
+		fmt.Printf("  + %s\n", e.Name)
+	}
+	fmt.Printf("%s %d item(s); %d already in storii.\n", verb, len(res.Added), res.Skipped)
+	return nil
 }
 
 func cmdPasswd(ctx context.Context, v *client.Vault) error {

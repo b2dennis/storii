@@ -45,6 +45,22 @@ struct SettingsView: View {
                     .onChange(of: lockMinutes) { _, m in AppModel.lockMinutes = m }
                     Button("Lock now") { model.lock() }
                 } header: { Text("Unlocking") } footer: { Text("How long storii may stay unlocked in the background.") }
+                Section {
+                    NavigationLink("Check passwords") { HealthView() }
+                } header: { Text("Password health") } footer: {
+                    Text("Find reused and weak passwords, and check which ones turned up in data breaches.")
+                }
+                Section {
+                    NavigationLink("Shares") { SharingView() }
+                } header: { Text("Sharing") } footer: {
+                    Text("Share secrets with family or a team. Everyone in a share sees and edits its secrets; the server can't read them.")
+                }
+                Section {
+                    NavigationLink("Recently deleted") { TrashView() }
+                } footer: { Text("Deleted secrets and contexts stay in the trash for 30 days.") }
+                Section {
+                    NavigationLink("Backups") { BackupsView() }
+                } footer: { Text("Save all your secrets to an encrypted file, or restore one.") }
                 Section("Account") {
                     LabeledContent("User", value: model.username)
                     LabeledContent("Server", value: model.server)

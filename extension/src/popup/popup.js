@@ -1,5 +1,6 @@
 import { totpFromFields, totpFields, totpCode, totpRemaining, parseOtpauth } from '../lib/totp.js';
 import { host as hostOf, contextMatches } from '../lib/match.js';
+import { checkHealth, pwned } from '../lib/health.js';
 import { cardBrand, cardDigits, cardMasked, cardValid, normalizeExpiry } from '../lib/card.js';
 
 const app = document.getElementById('app');
@@ -88,6 +89,8 @@ async function render() {
   if (ui.view === 'contexts') return renderContexts();
   if (ui.view === 'context') return renderContextEdit();
   if (ui.view === 'settings') return renderSettings(st);
+  if (ui.view === 'health') return renderHealth();
+  if (ui.view === 'trash') return renderTrash();
   return renderList(st);
 }
 
@@ -357,7 +360,7 @@ function drawLists() {
     (secrets().length ? '<div class="empty">No matches.</div>' : '<div class="empty">Your vault is empty. Add a password, 2FA code or API key with ＋.</div>')}</div>`;
   const lists = document.getElementById('lists');
   lists.innerHTML = html;
-  lists.querySelectorAll('.item').forEach((el) => (el.onclick = () => { ui.editing = el.dataset.id; ui.view = 'detail'; render(); }));
+  lists.querySelectorAll('.item').forEach((el) => (el.onclick = () => { ui.editing = el.dataset.id; ui.view = 'detail'; ui.detailReturn = null; render(); }));
   lists.querySelectorAll('[data-copy]').forEach((b) => (b.onclick = async (e) => {
     e.stopPropagation();
     const s = byId(b.dataset.copy);
@@ -431,9 +434,20 @@ function renderDetail() {
   const ctxs = (s.contexts || []).map(byId).filter(Boolean);
   body += `<div class="detail-field"><span class="k">Contexts</span><span class="v chips">${
     ctxs.map((c) => `<span class="chip" style="padding-right:9px">${esc(c.name)}</span>`).join('') || '<span class="muted">none</span>'}</span></div>`;
+  if (s.history?.length) {
+    const what = { password: 'Password', key: 'Key' };
+    body += `<details class="history"><summary class="muted small">Earlier ${s.history.every((h) => h.field === 'key') ? 'keys' : 'passwords'} (${s.history.length})</summary>${
+      s.history.map((h) => field(`${what[h.field] || h.field} until ${new Date(h.changed_at).toLocaleDateString()}`, h.value,
+        { secret: true, what: `Earlier ${(what[h.field] || h.field).toLowerCase()}` })).join('')}</details>`;
+  }
   app.innerHTML = header(`<button class="icon" id="back">‹</button> ${esc(s.name)}`, `<button id="edit">Edit</button>`) +
-    `<div class="pad"><div class="muted small">${TYPES[s.type] || s.type}</div>${body}</div>`;
-  document.getElementById('back').onclick = () => { ui.view = 'list'; render(); };
+    `<div class="pad"><div class="muted small">${TYPES[s.type] || s.type}<span id="shared"></span></div>${body}</div>`;
+  if (s.share) call('shares').then(({ shares }) => {
+    const sh = shares.find((x) => x.id === s.share);
+    const el = document.getElementById('shared');
+    if (sh && el) el.textContent = ` · shared in ${sh.name}`;
+  }).catch(() => {});
+  document.getElementById('back').onclick = () => { ui.view = ui.detailReturn || 'list'; render(); };
   document.getElementById('edit').onclick = () => openEdit(s.id);
   app.querySelectorAll('[data-copyval]').forEach((b) => (b.onclick = () => copy(b.dataset.copyval, b.dataset.what)));
   app.querySelectorAll('[data-reveal]').forEach((b) => (b.onclick = () => {
@@ -562,8 +576,9 @@ function renderEdit() {
   $('totpin')?.addEventListener('input', preview);
   preview();
   $('del')?.addEventListener('click', async () => {
-    if (!confirm(`Delete ${existing.name}?`)) return;
+    if (!confirm(`Delete ${existing.name}? It stays in the trash for 30 days.`)) return;
     await call('delete', { ids: [existing.id] });
+    toast('Moved to the trash');
     ui.view = 'list';
     render();
   });
@@ -599,7 +614,8 @@ function renderEdit() {
     const changes = [];
     if (d._siteContext && siteHost && !siteCtx) {
       const cid = crypto.randomUUID();
-      changes.push({ id: cid, item: { kind: 'context', name: siteHost, context_type: 'website', urls: [`https://${siteHost}`] } });
+      // A shared secret's new context goes into its share, where every member sees it.
+      changes.push({ id: cid, share: existing?.share, item: { kind: 'context', name: siteHost, context_type: 'website', urls: [`https://${siteHost}`] } });
       item.contexts.push(cid);
     }
     changes.push({ id: existing?.id, item });
@@ -660,6 +676,96 @@ function renderContextEdit() {
   };
 }
 
+// Weak and reused passwords, and (when asked) which ones Have I Been Pwned has seen in breaches.
+function renderHealth() {
+  const items = Object.fromEntries(ui.items.map((i) => [i.id, i]));
+  const h = checkHealth(items);
+  const row = (id, note) => {
+    const s = items[id];
+    return `<div class="item" data-id="${id}"><div class="badge">${BADGE.password}</div>
+      <div class="main"><div class="name">${esc(s.name)}</div><div class="sub">${esc(note || subtitle(s))}</div></div></div>`;
+  };
+  const b = ui.breaches;
+  const breached = b ? Object.entries(b.found).sort((x, y) => y[1] - x[1]) : [];
+  const section = (title, body) => `<div class="section">${title}</div><div class="list">${body}</div>`;
+  app.innerHTML = header('<button class="icon" id="back">‹</button> Password health') +
+    (b && breached.length ? section('Found in data breaches — change these first',
+      breached.map(([id, n]) => row(id, `Seen ${n.toLocaleString()} times`)).join('')) : '') +
+    (h.reused.length ? section('Reused passwords', h.reused.map((g, i) =>
+      `${i ? '<div class="group-gap"></div>' : ''}${g.map((id) => row(id)).join('')}`).join('')) : '') +
+    (h.weak.length ? section('Weak passwords', h.weak.map((id) => row(id)).join('')) : '') +
+    (!h.reused.length && !h.weak.length && !breached.length ? '<div class="empty">No reused or weak passwords.</div>' : '') +
+    `<div class="form">
+      <button id="breach" ${ui.checking ? 'disabled' : ''}>${ui.checking ? 'Checking…' : b ? (breached.length ? 'Check again' : 'None found in breaches · check again') : 'Check for data breaches'}</button>
+      <div class="muted small">Asks Have I Been Pwned. Only the first 5 characters of each password’s SHA-1 hash are sent,
+        so neither they nor anyone watching can tell which password was checked.</div>
+      <div class="err" id="err"></div></div>`;
+  document.getElementById('back').onclick = () => { ui.view = 'settings'; render(); };
+  app.querySelectorAll('.item').forEach((el) => (el.onclick = () => { ui.editing = el.dataset.id; ui.view = 'detail'; ui.detailReturn = 'health'; render(); }));
+  document.getElementById('breach').onclick = async () => {
+    ui.checking = true;
+    renderHealth();
+    try {
+      const byPw = new Map();
+      for (const [id, it] of Object.entries(items)) {
+        const pw = it.kind === 'secret' && it.type === 'password' && it.fields?.password;
+        if (pw) byPw.set(pw, [...(byPw.get(pw) || []), id]);
+      }
+      const found = {};
+      for (const [pw, ids] of byPw) {
+        const n = await pwned(pw);
+        if (n > 0) for (const id of ids) found[id] = n;
+      }
+      ui.breaches = { found };
+    } catch (e) {
+      ui.checking = false;
+      if (ui.view === 'health') { renderHealth(); document.getElementById('err').textContent = e.message; }
+      return;
+    }
+    ui.checking = false;
+    if (ui.view === 'health') renderHealth();
+  };
+}
+
+// Deleted items the server keeps for a while: restore them, or forget them for good.
+async function renderTrash() {
+  app.innerHTML = header('<button class="icon" id="back">‹</button> Recently deleted') + '<div class="empty">Loading…</div>';
+  document.getElementById('back').onclick = () => { ui.view = 'settings'; render(); };
+  let t;
+  try {
+    t = await call('trash');
+  } catch (e) {
+    app.querySelector('.empty').textContent = e.message;
+    return;
+  }
+  if (ui.view !== 'trash') return;
+  const when = (iso) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  app.innerHTML = header('<button class="icon" id="back">‹</button> Recently deleted',
+    t.items.length ? '<button id="empty" class="danger">Empty</button>' : '') +
+    `<p class="pad muted small" style="margin:0">Deleted secrets and contexts are kept for ${t.days} days.</p>
+    <div class="list">${t.items.map((d) => `<div class="item trashed" data-id="${d.id}">
+      <div class="badge">${d.kind === 'context' ? '◍' : BADGE[d.type] || '?'}</div>
+      <div class="main"><div class="name">${esc(d.name)}</div><div class="sub">${esc(d.kind === 'context' ? 'Context' : TYPES[d.type] || d.type)} · deleted ${esc(when(d.deleted_at))}</div></div>
+      <button data-restore="${d.id}">Restore</button></div>`).join('') || '<div class="empty">Nothing deleted recently.</div>'}</div>`;
+  document.getElementById('back').onclick = () => { ui.view = 'settings'; render(); };
+  app.querySelectorAll('[data-restore]').forEach((b) => (b.onclick = async () => {
+    b.disabled = true;
+    try {
+      await call('restore', { ids: [b.dataset.restore] });
+      ui.items = await call('items');
+      toast('Restored');
+    } catch (e) {
+      toast(e.message);
+    }
+    renderTrash();
+  }));
+  document.getElementById('empty')?.addEventListener('click', async () => {
+    if (!confirm(`Forget ${t.items.length} deleted item(s) for good?`)) return;
+    await call('emptyTrash', {});
+    renderTrash();
+  });
+}
+
 async function renderSettings(st) {
   const s = await call('settings', {});
   app.innerHTML = header('<button class="icon" id="back">‹</button> Settings') + `<div class="form">
@@ -669,11 +775,25 @@ async function renderSettings(st) {
       Unlock with a passkey</label>
       <div class="muted small">Windows Hello, Touch ID, your phone or a security key instead of the master password. Set up per browser.</div>
       <div class="err" id="qerr"></div></div>
+    <button id="health">Password health…</button>
+    <button id="trash">Recently deleted…</button>
     <button id="import">Import passwords from a browser…</button>
+    <button id="backups">Backups…</button>
+    <button id="sharing">Sharing…</button>
     <div class="muted small">Logged in as <b>${esc(st.username)}</b> on ${esc(st.server)}.</div>
     <div class="muted small">Keyboard shortcut to fill the current page: Ctrl+Shift+L (change it in the browser’s extension shortcut settings).</div>
     <button id="out" class="danger">Log out of this browser</button></div>`;
   document.getElementById('back').onclick = () => { ui.view = 'list'; render(); };
+  document.getElementById('health').onclick = () => { ui.view = 'health'; render(); };
+  document.getElementById('trash').onclick = () => { ui.view = 'trash'; render(); };
+  document.getElementById('sharing').onclick = async () => {
+    await chrome.tabs.create({ url: chrome.runtime.getURL('sharing/sharing.html') });
+    window.close();
+  };
+  document.getElementById('backups').onclick = async () => {
+    await chrome.tabs.create({ url: chrome.runtime.getURL('backup/backup.html') });
+    window.close();
+  };
   document.getElementById('import').onclick = async () => {
     await chrome.tabs.create({ url: chrome.runtime.getURL('import/import.html') });
     window.close();

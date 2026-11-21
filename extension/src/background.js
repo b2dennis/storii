@@ -1,11 +1,14 @@
 // The background worker owns the vault: the encrypted copy in storage.local, and while unlocked the vault key in
 // storage.session (memory only, gone when the browser closes). Content scripts only ever get the secrets of
 // contexts that match the frame they run in.
+import { sealBackup, openBackup, restorePlan } from './lib/backup.js';
 import { deriveKeys, newKdf, randomBytes, toB64, fromB64, wrapVaultKey, unwrapVaultKey, encryptItem, decryptItem, seal, open } from './lib/crypto.js';
 import { contextMatches, host as hostOf } from './lib/match.js';
 import { totpFromFields, totpCode } from './lib/totp.js';
 import { cardBrand, cardDigits, cardValid, normalizeExpiry } from './lib/card.js';
 import { createPasskey, assertPasskey, rpIdAllowed } from './lib/passkey.js';
+import { withHistory } from './lib/history.js';
+import * as share from './lib/share.js';
 
 const DEFAULT_LOCK_MINUTES = 15;
 
@@ -28,22 +31,55 @@ async function getVaultKey() {
   return vaultKey ? fromB64(vaultKey) : null;
 }
 
-// Decrypted items, cached per worker lifetime and rebuilt on demand.
+// Decrypted items, cached per worker lifetime and rebuilt on demand. Items kept in a share are in the same map;
+// itemShare says which share (docs/CRYPTO.md#sharing).
 let cache = null; // Map id -> item
+let itemShare = new Map(); // item id -> share id
+let shareInfo = new Map(); // share id -> { id, name, owner, members, mine, key }
+let sharePriv = null;
 
 async function items() {
   if (cache) return cache;
   const key = await getVaultKey();
   const state = await getState();
   if (!key || !state) return null;
-  cache = new Map();
+  const all = new Map();
   for (const [id, it] of Object.entries(state.items || {})) {
     try {
-      cache.set(id, await decryptItem(key, id, it.data));
+      all.set(id, await decryptItem(key, id, it.data));
     } catch {
       console.warn('storii: could not decrypt item', id);
     }
   }
+  const where = new Map();
+  const info = new Map();
+  let priv = null;
+  if (state.sealed_private_key) {
+    try {
+      priv = await share.openSharePrivateKey(key, state.sealed_private_key);
+    } catch { /* not ours */ }
+  }
+  for (const sh of priv ? Object.values(state.shares || {}) : []) {
+    let sk;
+    try {
+      sk = await share.unwrapShareKey(priv, sh.id, sh.wrapped_key);
+    } catch {
+      continue;
+    }
+    const meta = await share.openShareMeta(sk, sh.id, sh.meta).catch(() => ({ name: '' }));
+    info.set(sh.id, { id: sh.id, name: meta.name, owner: sh.owner, members: sh.members || [],
+      mine: sh.owner.toLowerCase() === state.username.toLowerCase(), key: sk });
+    for (const [id, it] of Object.entries(sh.items || {})) {
+      if (all.has(id)) continue; // the personal copy wins
+      try {
+        all.set(id, await share.decryptShareItem(sk, sh.id, id, it.data));
+        where.set(id, sh.id);
+      } catch {
+        console.warn('storii: could not decrypt shared item', id);
+      }
+    }
+  }
+  [cache, itemShare, shareInfo, sharePriv] = [all, where, info, priv];
   return cache;
 }
 
@@ -93,6 +129,9 @@ async function pull(state) {
   const acct = await api(state, 'GET', '/api/v2/account');
   state.kdf = acct.kdf;
   state.wrapped_key = acct.wrapped_key;
+  state.public_key = acct.public_key || '';
+  state.sealed_private_key = acct.sealed_private_key || '';
+  await pullShares(state);
   const { revision, items: changes } = await api(state, 'GET', `/api/v2/sync?since=${state.revision || 0}`);
   // since=0 is a full snapshot without tombstones: replace, or deletions made elsewhere would never arrive.
   if (!state.revision || !state.items) state.items = {};
@@ -101,6 +140,56 @@ async function pull(state) {
     else state.items[it.id] = { id: it.id, data: it.data, revision: it.revision };
   }
   state.revision = revision;
+}
+
+// Follows the shares list: new shares are fetched whole, changed ones from their revision, gone ones dropped.
+async function pullShares(state) {
+  let list;
+  try {
+    ({ shares: list } = await api(state, 'GET', '/api/v2/shares'));
+  } catch (e) {
+    if (e.status === 404) return; // a server from before sharing
+    throw e;
+  }
+  const old = state.shares || {};
+  const next = {};
+  for (const r of list) {
+    let sh = old[r.id];
+    if (!sh || sh.wrapped_key !== r.wrapped_key) sh = { id: r.id, revision: 0, items: {} };
+    Object.assign(sh, { owner: r.owner, meta: r.meta, wrapped_key: r.wrapped_key, members: r.members });
+    if (r.revision !== sh.revision) {
+      const { revision, items: changes } = await api(state, 'GET', `/api/v2/shares/${r.id}/sync?since=${sh.revision}`);
+      if (!sh.revision) sh.items = {};
+      for (const it of changes) {
+        if (it.deleted) delete sh.items[it.id];
+        else sh.items[it.id] = { id: it.id, data: it.data, revision: it.revision };
+      }
+      sh.revision = revision;
+    }
+    next[r.id] = sh;
+  }
+  state.shares = next;
+}
+
+// Every account gets a sharing key pair, so others can add it to shares. The first device to ask wins.
+async function setupSharing() {
+  const key = await getVaultKey();
+  const state = await getState();
+  if (!key || !state || state.public_key) return;
+  const { priv, pub } = await share.newShareKeyPair();
+  let acct;
+  try {
+    acct = await api(state, 'PUT', '/api/v2/account/keys',
+      { public_key: toB64(pub), sealed_private_key: await share.sealSharePrivateKey(key, priv) });
+  } catch (e) {
+    if (e.status === 404) return;
+    if (e.status !== 409) throw e;
+    acct = await api(state, 'GET', '/api/v2/account');
+  }
+  state.public_key = acct.public_key;
+  state.sealed_private_key = acct.sealed_private_key;
+  await setState(state);
+  cache = null;
 }
 
 async function sync() {
@@ -118,6 +207,7 @@ async function sync() {
   await setState(state);
   cache = null;
   // The master password may have changed elsewhere; the current vault key stays valid (it is never rotated).
+  if (!state.public_key && (await getVaultKey())) await setupSharing().catch(() => {});
 }
 
 function deviceName() {
@@ -154,6 +244,7 @@ async function login({ server, username, password, register }) {
   cache = null;
   await touch();
   updateBadge();
+  await setupSharing().catch(() => {});
 }
 
 async function unlock({ password }) {
@@ -223,36 +314,123 @@ async function logout() {
 // Writes go to the server first, then into the local copy.
 const WRITE_CHUNK = 1000;
 
+// Encrypts an item for where it's kept: the personal vault (shareId '') or a share.
+async function encryptFor(shareId, id, item) {
+  if (!shareId) return encryptItem(await getVaultKey(), id, item);
+  const sh = shareInfo.get(shareId);
+  if (!sh) throw new Error('no such share');
+  return share.encryptShareItem(sh.key, shareId, id, item);
+}
+
+// Sends writes to the place each one names ({ id, data | delete, place }), chunked, keeping each stored chunk.
+async function send(state, writes) {
+  const groups = new Map();
+  for (const w of writes) groups.set(w.place || '', [...(groups.get(w.place || '') || []), w]);
+  for (const [place, ws] of groups) {
+    // The server takes at most 2000 writes per request (a big import has more).
+    for (let i = 0; i < ws.length; i += WRITE_CHUNK) {
+      const chunk = ws.slice(i, i + WRITE_CHUNK).map(({ place: _, ...w }) => w);
+      const path = place ? `/api/v2/shares/${place}/items` : '/api/v2/items';
+      const { revision } = await api(state, 'POST', path, { writes: chunk });
+      const store = place ? state.shares[place].items : state.items;
+      for (const w of chunk) {
+        if (w.delete) delete store[w.id];
+        else store[w.id] = { id: w.id, data: w.data, revision };
+      }
+      await setState(state);
+    }
+  }
+  cache = null;
+}
+
+// changes: [{ id?, item, share? } | { id, delete: true }]. Existing items stay where they are; new ones go into
+// `share` (a share id) or the personal vault.
 async function write(changes) {
   const key = await getVaultKey();
   const state = await getState();
   if (!key || !state) throw new Error('locked');
   const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
   const writes = [];
-  const plain = {};
+  const known = await items();
   for (const ch of changes) {
+    const existing = ch.id && known?.has(ch.id);
     if (ch.delete) {
-      writes.push({ id: ch.id, delete: true });
+      writes.push({ id: ch.id, delete: true, place: itemShare.get(ch.id) || '' });
       continue;
     }
     const id = ch.id || crypto.randomUUID();
-    const item = { ...ch.item, created_at: ch.item.created_at || now, updated_at: now };
-    plain[id] = item;
-    writes.push({ id, data: await encryptItem(key, id, item) });
+    const place = existing ? itemShare.get(id) || '' : ch.share || '';
+    const prev = ch.id && known?.get(ch.id);
+    let item = { ...ch.item, created_at: ch.item.created_at || now, updated_at: now };
+    if (prev) item = withHistory(prev, item, now);
+    writes.push({ id, data: await encryptFor(place, id, item), place });
   }
-  // The server takes at most 2000 writes per request (a big import has more); each chunk is kept once it's stored.
-  for (let i = 0; i < writes.length; i += WRITE_CHUNK) {
-    const chunk = writes.slice(i, i + WRITE_CHUNK);
-    const { revision } = await api(state, 'POST', '/api/v2/items', { writes: chunk });
-    for (const w of chunk) {
-      if (w.delete) delete state.items[w.id];
-      else state.items[w.id] = { id: w.id, data: w.data, revision };
-    }
-    await setState(state);
-  }
-  cache = null;
+  await send(state, writes);
   await touch();
   return writes.map((w) => w.id);
+}
+
+// Moves items into a share (or home with shareId ''), under the same ids. A moved secret's contexts go along when
+// nothing staying behind uses them; otherwise it gets a copy of the context in its new place.
+async function moveItems(ids, shareId) {
+  const state = await getState();
+  const all = await items();
+  if (!all || !state) throw new Error('locked');
+  if (shareId && !shareInfo.has(shareId)) throw new Error('no such share');
+  const placeOf = (id) => itemShare.get(id) || '';
+  const moving = new Set(ids.filter((id) => all.has(id) && placeOf(id) !== shareId));
+  const out = new Map([...moving].map((id) => [id, all.get(id)]));
+  for (const id of [...moving]) {
+    const it = out.get(id);
+    if (it.kind !== 'secret') continue;
+    const contexts = [...(it.contexts || [])];
+    contexts.forEach((c, i) => {
+      if (moving.has(c) || placeOf(c) === shareId || !all.has(c)) return;
+      const usedElsewhere = [...all].some(([sid, s]) => !moving.has(sid) && s.contexts?.includes(c));
+      if (!usedElsewhere) {
+        moving.add(c);
+        out.set(c, all.get(c));
+        return;
+      }
+      const copy = crypto.randomUUID();
+      const { created_at: _, ...ctx } = all.get(c);
+      out.set(copy, ctx);
+      moving.add(copy);
+      contexts[i] = copy;
+    });
+    out.set(id, { ...it, contexts });
+  }
+  if (!out.size) return 0;
+  const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+  const puts = [];
+  const deletes = [];
+  for (const [id, it] of out) {
+    const item = { ...it, created_at: it.created_at || now };
+    puts.push({ id, data: await encryptFor(shareId, id, item), place: shareId });
+    if (all.has(id)) deletes.push({ id, delete: true, place: placeOf(id) });
+  }
+  // The new place first, so a failure halfway leaves a copy rather than nothing.
+  await send(state, puts);
+  await send(state, deletes);
+  // A moved item isn't deleted: keep it out of the personal trash, where restoring it would duplicate it.
+  const home = deletes.filter((d) => !d.place).map((d) => d.id);
+  if (home.length) await api(state, 'DELETE', '/api/v2/trash', { ids: home }).catch(() => {});
+  await touch();
+  return out.size;
+}
+
+async function sharesList() {
+  await items();
+  const state = await getState();
+  const count = new Map();
+  for (const sid of itemShare.values()) count.set(sid, (count.get(sid) || 0) + 1);
+  const pub = state?.public_key ? fromB64(state.public_key) : null;
+  return {
+    fingerprint: pub ? await share.fingerprint(pub) : '',
+    username: state?.username,
+    shares: [...shareInfo.values()].map(({ key: _, ...s }) => ({ ...s, items: count.get(s.id) || 0 }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  };
 }
 
 async function deleteItems(ids) {
@@ -642,7 +820,63 @@ const popupHandlers = {
     const all = await items();
     if (!all) throw new Error('locked');
     await touch();
-    return [...all].map(([id, it]) => ({ id, ...it }));
+    return [...all].map(([id, it]) => ({ id, ...it, ...(itemShare.has(id) ? { share: itemShare.get(id) } : {}) }));
+  },
+  // Sharing.
+  async shares() {
+    if (!(await items())) throw new Error('locked');
+    await setupSharing().catch(() => {});
+    await touch();
+    return sharesList();
+  },
+  async createShare({ name }) {
+    await setupSharing();
+    await items();
+    const state = await getState();
+    if (!sharePriv) throw new Error('sharing is not set up on this server');
+    name = (name || '').trim();
+    if (!name) throw new Error('a share needs a name');
+    const id = crypto.randomUUID();
+    const sk = share.newShareKey();
+    const wrapped = await share.wrapShareKey(fromB64(state.public_key), id, sk);
+    const meta = await share.sealShareMeta(sk, id, { name });
+    await api(state, 'POST', '/api/v2/shares', { id, meta, wrapped_key: wrapped });
+    await sync();
+    return id;
+  },
+  async renameShare({ id, name }) {
+    await items();
+    const sh = shareInfo.get(id);
+    if (!sh) throw new Error('no such share');
+    await api(await getState(), 'PUT', `/api/v2/shares/${id}`, { meta: await share.sealShareMeta(sh.key, id, { name: name.trim() }) });
+    await sync();
+  },
+  // Someone's public key and fingerprint, to compare with them before adding them.
+  async memberKey({ username }) {
+    const r = await api(await getState(), 'GET', `/api/v2/users/${encodeURIComponent(username.trim())}/key`);
+    const pub = fromB64(r.public_key);
+    if (pub.length !== 32) throw new Error('the server sent a malformed key');
+    return { username: r.username, public_key: r.public_key, fingerprint: await share.fingerprint(pub) };
+  },
+  async addMember({ id, username, publicKey }) {
+    await items();
+    const sh = shareInfo.get(id);
+    if (!sh) throw new Error('no such share');
+    const wrapped = await share.wrapShareKey(fromB64(publicKey), id, sh.key);
+    await api(await getState(), 'PUT', `/api/v2/shares/${id}/members/${encodeURIComponent(username)}`, { wrapped_key: wrapped });
+    await sync();
+  },
+  async removeMember({ id, username }) {
+    await api(await getState(), 'DELETE', `/api/v2/shares/${id}/members/${encodeURIComponent(username)}`);
+    await sync();
+  },
+  // Deletes the share and its items (owner) or leaves it (members).
+  async deleteShare({ id }) {
+    await api(await getState(), 'DELETE', `/api/v2/shares/${id}`);
+    await sync();
+  },
+  async moveItems({ ids, share: shareId }) {
+    return moveItems(ids, shareId || '');
   },
   async save({ id, item }) {
     return (await write([{ id, item }]))[0];
@@ -652,6 +886,68 @@ const popupHandlers = {
   },
   async delete({ ids }) {
     return deleteItems(ids);
+  },
+  // Deleted items the server keeps for a while, decrypted; ones this vault key can't read are left out.
+  async trash() {
+    const key = await getVaultKey();
+    const state = await getState();
+    if (!key || !state) throw new Error('locked');
+    const { items: list, days } = await api(state, 'GET', '/api/v2/trash');
+    const out = [];
+    for (const t of list) {
+      try {
+        out.push({ ...(await decryptItem(key, t.id, t.data)), id: t.id, deleted_at: t.deleted_at });
+      } catch { /* not ours to read */ }
+    }
+    await touch();
+    return { items: out, days };
+  },
+  // Puts deleted items back exactly as they were: the same ciphertext under the same id.
+  async restore({ ids }) {
+    const state = await getState();
+    if (!(await getVaultKey()) || !state) throw new Error('locked');
+    const { items: list } = await api(state, 'GET', '/api/v2/trash');
+    const writes = list.filter((t) => ids.includes(t.id)).map((t) => ({ id: t.id, data: t.data }));
+    if (!writes.length) return 0;
+    const { revision } = await api(state, 'POST', '/api/v2/items', { writes });
+    for (const w of writes) state.items[w.id] = { id: w.id, data: w.data, revision };
+    await setState(state);
+    cache = null;
+    await touch();
+    return writes.length;
+  },
+  // An encrypted backup of every item (the file's text), sealed with a backup password.
+  async backup({ password }) {
+    const all = await items();
+    if (!all) throw new Error('locked');
+    await touch();
+    return sealBackup(password, Object.fromEntries(all));
+  },
+  // Adds a backup's items that the vault doesn't have, as they were and under their ids; others are left alone.
+  async restoreBackup({ password, text, dryRun }) {
+    const key = await getVaultKey();
+    const state = await getState();
+    if (!key || !state) throw new Error('locked');
+    const { add, skipped } = restorePlan(await openBackup(password, text), new Set((await items()).keys()));
+    if (!dryRun) {
+      const writes = [];
+      for (const [id, it] of add) writes.push({ id, data: await encryptItem(key, id, it) });
+      for (let i = 0; i < writes.length; i += WRITE_CHUNK) {
+        const chunk = writes.slice(i, i + WRITE_CHUNK);
+        const { revision } = await api(state, 'POST', '/api/v2/items', { writes: chunk });
+        for (const w of chunk) state.items[w.id] = { id: w.id, data: w.data, revision };
+        await setState(state);
+      }
+      cache = null;
+    }
+    await touch();
+    return { added: add.map(([, it]) => it.name), skipped };
+  },
+  // Forgets deleted items for good: ids, or everything.
+  async emptyTrash({ ids }) {
+    const state = await getState();
+    if (!(await getVaultKey()) || !state) throw new Error('locked');
+    await api(state, 'DELETE', '/api/v2/trash', { ids: ids || [] });
   },
   async settings({ set }) {
     if (set) {

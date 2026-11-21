@@ -65,9 +65,11 @@ type Item struct {
 	URLs            []string `json:"urls,omitempty"`
 	AndroidPackages []string `json:"android_packages,omitempty"`
 
-	Notes     string    `json:"notes,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Notes string `json:"notes,omitempty"`
+	// History holds earlier passwords and API keys (WithHistory).
+	History   []HistoryEntry `json:"history,omitempty"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
 }
 
 type CustomField struct {

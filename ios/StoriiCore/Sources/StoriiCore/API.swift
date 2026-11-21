@@ -15,10 +15,80 @@ public struct Account: Codable, Sendable {
     public var kdf: KDF
     public var wrappedKey: String
     public var revision: Int64
+    public var publicKey: String = ""
+    public var sealedPrivateKey: String = ""
 
     enum CodingKeys: String, CodingKey {
         case username, kdf, revision
+        case wrappedKey = "wrapped_key", publicKey = "public_key", sealedPrivateKey = "sealed_private_key"
+    }
+
+    public init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        username = try c.decode(String.self, forKey: .username)
+        kdf = try c.decode(KDF.self, forKey: .kdf)
+        wrappedKey = try c.decode(String.self, forKey: .wrappedKey)
+        revision = try c.decodeIfPresent(Int64.self, forKey: .revision) ?? 0
+        publicKey = try c.decodeIfPresent(String.self, forKey: .publicKey) ?? ""
+        sealedPrivateKey = try c.decodeIfPresent(String.self, forKey: .sealedPrivateKey) ?? ""
+    }
+}
+
+public struct ShareMember: Codable, Equatable, Sendable {
+    public var username: String
+    public var publicKey: String
+    public var owner: Bool
+
+    public init(username: String, publicKey: String = "", owner: Bool = false) {
+        self.username = username
+        self.publicKey = publicKey
+        self.owner = owner
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case username, owner
+        case publicKey = "public_key"
+    }
+
+    public init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        username = try c.decode(String.self, forKey: .username)
+        publicKey = try c.decodeIfPresent(String.self, forKey: .publicKey) ?? ""
+        owner = try c.decodeIfPresent(Bool.self, forKey: .owner) ?? false
+    }
+}
+
+/// A share as the server lists it; meta and the wrapped key are encrypted.
+public struct RemoteShare: Codable, Sendable {
+    public var id: String
+    public var owner: String
+    public var meta: String
+    public var wrappedKey: String
+    public var members: [ShareMember]
+    public var revision: Int64
+
+    enum CodingKeys: String, CodingKey {
+        case id, owner, meta, members, revision
         case wrappedKey = "wrapped_key"
+    }
+
+    public init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        owner = try c.decode(String.self, forKey: .owner)
+        meta = try c.decode(String.self, forKey: .meta)
+        wrappedKey = try c.decode(String.self, forKey: .wrappedKey)
+        members = try c.decodeIfPresent([ShareMember].self, forKey: .members) ?? []
+        revision = try c.decodeIfPresent(Int64.self, forKey: .revision) ?? 0
+    }
+}
+
+public struct UserKey: Codable, Sendable {
+    public var username: String
+    public var publicKey: String
+    enum CodingKeys: String, CodingKey {
+        case username
+        case publicKey = "public_key"
     }
 }
 
@@ -144,9 +214,75 @@ public struct API: Sendable {
     public func account() async throws -> Account { try await call("GET", "/api/v2/account", as: Account.self) }
     public func sync(since: Int64) async throws -> SyncResponse { try await call("GET", "/api/v2/sync?since=\(since)", as: SyncResponse.self) }
 
+    public struct TrashItem: Codable, Sendable {
+        public let id: String
+        public let data: String
+        public let deleted_at: String
+    }
+
+    /// Deleted items the server still keeps, newest first, and for how many days.
+    public func trash() async throws -> (items: [TrashItem], days: Int) {
+        struct R: Decodable { let items: [TrashItem]; let days: Int }
+        let r = try await call("GET", "/api/v2/trash", as: R.self)
+        return (r.items, r.days)
+    }
+
+    /// Forgets deleted items for good: `ids`, or all of them when it's empty.
+    public func emptyTrash(_ ids: [String]) async throws {
+        _ = try await call("DELETE", "/api/v2/trash", ["ids": ids], as: Empty.self)
+    }
+
     public func write(_ writes: [Write]) async throws -> Int64 {
         struct Req: Encodable { let writes: [Write] }
         struct R: Decodable { let revision: Int64 }
         return try await call("POST", "/api/v2/items", Req(writes: writes), as: R.self).revision
+    }
+
+    // MARK: sharing
+
+    private static func esc(_ s: String) -> String {
+        s.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? s
+    }
+    private func share(_ id: String) -> String { "/api/v2/shares/" + Self.esc(id) }
+
+    public func shares() async throws -> [RemoteShare] {
+        struct R: Decodable { let shares: [RemoteShare]? }
+        return try await call("GET", "/api/v2/shares", as: R.self).shares ?? []
+    }
+
+    public func setShareKeys(publicKey: String, sealedPrivateKey: String) async throws -> Account {
+        try await call("PUT", "/api/v2/account/keys", ["public_key": publicKey, "sealed_private_key": sealedPrivateKey], as: Account.self)
+    }
+
+    public func userKey(_ username: String) async throws -> UserKey {
+        try await call("GET", "/api/v2/users/\(Self.esc(username))/key", as: UserKey.self)
+    }
+
+    public func createShare(id: String, meta: String, wrappedKey: String) async throws {
+        _ = try await call("POST", "/api/v2/shares", ["id": id, "meta": meta, "wrapped_key": wrappedKey], as: Empty.self)
+    }
+
+    public func renameShare(_ id: String, meta: String) async throws {
+        _ = try await call("PUT", share(id), ["meta": meta], as: Empty.self)
+    }
+
+    public func deleteShare(_ id: String) async throws { _ = try await call("DELETE", share(id), as: Empty.self) }
+
+    public func addShareMember(_ id: String, username: String, wrappedKey: String) async throws {
+        _ = try await call("PUT", share(id) + "/members/" + Self.esc(username), ["wrapped_key": wrappedKey], as: Empty.self)
+    }
+
+    public func removeShareMember(_ id: String, username: String) async throws {
+        _ = try await call("DELETE", share(id) + "/members/" + Self.esc(username), as: Empty.self)
+    }
+
+    public func shareSync(_ id: String, since: Int64) async throws -> SyncResponse {
+        try await call("GET", share(id) + "/sync?since=\(since)", as: SyncResponse.self)
+    }
+
+    public func shareWrite(_ id: String, _ writes: [Write]) async throws -> Int64 {
+        struct Req: Encodable { let writes: [Write] }
+        struct R: Decodable { let revision: Int64 }
+        return try await call("POST", share(id) + "/items", Req(writes: writes), as: R.self).revision
     }
 }

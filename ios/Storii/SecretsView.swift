@@ -190,6 +190,16 @@ struct DetailView: View {
                 if let n = it.notes, !n.isEmpty {
                     Section("Notes") { Text(n).textSelection(.enabled) }
                 }
+                if !it.history.isEmpty {
+                    Section {
+                        DisclosureGroup("Earlier \(it.history.allSatisfy { $0.field == "key" } ? "keys" : "passwords") (\(it.history.count))") {
+                            ForEach(Array(it.history.enumerated()), id: \.offset) { _, h in
+                                FieldRow(label: "\(h.field == "key" ? "Key" : "Password") until \(h.changedAt.prefix(10))",
+                                         value: h.value, secret: true, mono: true)
+                            }
+                        }
+                    }
+                }
                 Section {
                     if it.contexts.isEmpty {
                         Text("Not in any context, so AutoFill only finds it by searching.").foregroundStyle(.secondary)
@@ -205,6 +215,7 @@ struct DetailView: View {
                         }
                     }
                 } header: { Text("Contexts") }
+                if it.isSecret { ShareLine(id: id) }
                 Section {
                     Button("Delete", role: .destructive) { confirmDelete = true }
                 } footer: {
@@ -218,7 +229,7 @@ struct DetailView: View {
                 Button("Delete", role: .destructive) {
                     Task { if await model.delete([id]) { dismiss() } }
                 }
-            }
+            } message: { Text("It stays in Settings → Recently deleted for 30 days.") }
         } else {
             ContentUnavailableView("Deleted", systemImage: "trash")
         }

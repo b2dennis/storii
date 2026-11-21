@@ -321,6 +321,17 @@ fun DetailScreen(nav: NavController, id: String) {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 linked.forEach { (cid, c) -> AssistChip(onClick = { nav.navigate(ContextEditRoute(cid)) }, label = { Text(c.name) }) }
             }
+            if (item.history.isNotEmpty()) {
+                var open by remember { mutableStateOf(false) }
+                val keysOnly = item.history.all { it.field == "key" }
+                TextButton(onClick = { open = !open }, contentPadding = PaddingValues(0.dp), modifier = Modifier.padding(top = 8.dp)) {
+                    Text("${if (open) "Hide" else "Show"} earlier ${if (keysOnly) "keys" else "passwords"} (${item.history.size})")
+                }
+                if (open) item.history.forEach { h ->
+                    FieldRow("${if (h.field == "key") "Key" else "Password"} until ${h.changedAt.take(10)}", h.value, secret = true)
+                }
+            }
+            if (item.isSecret) ShareLine(id)
             item.updatedAt?.let {
                 Text("Updated ${it.replace('T', ' ').removeSuffix("Z")} UTC", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 16.dp))
