@@ -114,6 +114,9 @@ test('register, add secrets in the popup, autofill, save prompt', { timeout: 120
   await popup.fill('#pw2', MASTER);
   await popup.click('#go');
   await popup.waitForSelector('#q', { timeout: 30000 });
+  // A sync works, also against an older server whose missing endpoints answer in plain text.
+  const synced = await popup.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'sync' }, (x) => r(x))));
+  assert.equal(synced.error, undefined);
 
   // Passkey unlock: Chromium's virtual authenticator stands in for Windows Hello / Touch ID (with PRF).
   const cdp = await popup.context().newCDPSession(popup);

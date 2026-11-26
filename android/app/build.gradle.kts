@@ -12,8 +12,8 @@ android {
         applicationId = "sh.base2.storii"
         minSdk = 29
         targetSdk = 37
-        versionCode = 8
-        versionName = "2.6.0"
+        versionCode = 9
+        versionName = "2.6.1"
     }
 
     buildTypes {

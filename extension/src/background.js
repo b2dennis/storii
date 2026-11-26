@@ -116,7 +116,13 @@ async function api(state, method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
-  const data = text ? JSON.parse(text) : {};
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    // Not JSON, e.g. Go's plain "404 page not found" from a server that predates an endpoint.
+    if (res.ok) throw new Error('the server sent something that isn\'t JSON');
+  }
   if (!res.ok) {
     const err = new Error(data.error || `server answered ${res.status}`);
     err.status = res.status;
